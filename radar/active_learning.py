@@ -27,20 +27,8 @@ def get_feed_dic_obs(obs):
 def get_inv(sess, obs):
   num_obs = len(obs)
   feed_dic = get_feed_dic_obs(obs)
-  return sess.run(x_invs, feed_dict = feed_dic)[num_obs-1][0],\
-         sess.run(y_invs, feed_dict = feed_dic)[num_obs-1][0]
-
-sess = load_model("model.ckpt")
-
-print get_inv(sess, [ ((1,1),[1.0, 0.0]),
-                     ((10,10),[0.0,1.0]) ])
-
-hid_x = gen_X()
-obs = [gen_O(hid_x) for i in range(10)]
-
-print hid_x
-res_x, res_y = get_inv(sess, obs)
-print np.argmax(res_x), np.argmax(res_y)
+  return np.argmax(sess.run(x_invs, feed_dict = feed_dic)[num_obs-1][0]),\
+         np.argmax(sess.run(y_invs, feed_dict = feed_dic)[num_obs-1][0])
 
 def get_most_confuse(sess, obs):
   feed_dic = get_feed_dic_obs(obs)
@@ -51,14 +39,23 @@ def get_most_confuse(sess, obs):
     for j in range(L):
       all_querys.append((i,j))
 
+  most_conf = (1.0, None)
+
   for q in all_querys:
     q_x, q_y = vectorize(q)
     print q
     feed_dic[ph_new_ob_x] = np.tile(q_x, [N_BATCH,1])
     feed_dic[ph_new_ob_y] = np.tile(q_y, [N_BATCH,1])
     pred_tf = sess.run(query_preds, feed_dict=feed_dic)[key_ob][0]
-
+    most_conf = min(most_conf, (abs(pred_tf[0] - pred_tf[1]), q)) 
     print pred_tf
 
-print get_most_confuse(sess, obs)
+  return most_conf
 
+def get_random_inv(sess, query):
+  ob_pts = [(np.random.randint(0, L), np.random.randint(0,L)) for _ in range(OBS_SIZE)]
+  obs = [(op, query(op)) for op in ob_pts]
+  return get_inv(sess, obs)
+
+# def get_active_inv(sess):
+  

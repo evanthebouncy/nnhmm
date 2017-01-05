@@ -75,14 +75,20 @@ def gen_X(ll = L):
   y_coord = np.random.randint(0, ll)
   return x_coord, y_coord
 
+def mk_query(X, ll=L):
+  def query(O):
+    if dist(X,O) < ll / 3.0:
+      return [1.0, 0.0]
+    else:
+      return [0.0, 1.0]
+  return query
+
 def gen_O(X, ll = L):
+  query = mk_query(X)
   Ox = np.random.randint(0, ll)
   Oy = np.random.randint(0, ll)
   O = (Ox, Oy)
-  if dist(X,O) < ll / 3.0:
-    return O, [1.0, 0.0]
-  else:
-    return O, [0.0, 1.0]
+  return O, query(O) 
   
 # data of the form of
 #    x: the true location of the hidden variable
