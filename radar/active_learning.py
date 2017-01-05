@@ -43,19 +43,25 @@ def get_most_confuse(sess, obs):
 
   for q in all_querys:
     q_x, q_y = vectorize(q)
-    print q
     feed_dic[ph_new_ob_x] = np.tile(q_x, [N_BATCH,1])
     feed_dic[ph_new_ob_y] = np.tile(q_y, [N_BATCH,1])
     pred_tf = sess.run(query_preds, feed_dict=feed_dic)[key_ob][0]
     most_conf = min(most_conf, (abs(pred_tf[0] - pred_tf[1]), q)) 
-    print pred_tf
 
-  return most_conf
+  return most_conf[1]
 
 def get_random_inv(sess, query):
   ob_pts = [(np.random.randint(0, L), np.random.randint(0,L)) for _ in range(OBS_SIZE)]
   obs = [(op, query(op)) for op in ob_pts]
   return get_inv(sess, obs)
 
-# def get_active_inv(sess):
+def get_active_inv(sess, query):
+  rand_guess = (np.random.randint(0,L), np.random.randint(0,L))
+  obs = [(rand_guess, query(rand_guess))]
+
+  for i in range(OBS_SIZE-1):
+    most_conf = get_most_confuse(sess, obs)
+    obs.append((most_conf, query(most_conf)))
+
+  return get_inv(sess, obs)
   
