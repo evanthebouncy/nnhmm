@@ -64,8 +64,8 @@ b_ob_enc = bias_variable([n_hidden])
 VAR_inv += [W_ob_enc, b_ob_enc]
 VAR_pred += [W_ob_enc, b_ob_enc]
 
-hiddens = []
 hidden_rollin = hidden_tile
+hiddens = [hidden_rollin]
 for i in range(OBS_SIZE):
   print "volvoing input ", i
   ob_xx = ph_obs_x[i]

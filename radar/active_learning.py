@@ -26,13 +26,18 @@ def get_feed_dic_obs(obs):
 
 def get_inv(sess, obs):
   num_obs = len(obs)
+  return get_inv_tr(sess, obs)[num_obs]
+
+def get_inv_tr(sess, obs):
+  num_obs = len(obs)
   feed_dic = get_feed_dic_obs(obs)
-  return np.argmax(sess.run(x_invs, feed_dict = feed_dic)[num_obs-1][0]),\
-         np.argmax(sess.run(y_invs, feed_dict = feed_dic)[num_obs-1][0])
+  x_invss = [np.argmax(x[0]) for x in sess.run(x_invs, feed_dict = feed_dic)]
+  y_invss = [np.argmax(x[0]) for x in sess.run(y_invs, feed_dict = feed_dic)]
+  return zip(x_invss, y_invss)
 
 def get_most_confuse(sess, obs):
   feed_dic = get_feed_dic_obs(obs)
-  key_ob = len(obs)-1
+  key_ob = len(obs)
 
   all_querys = []
   for i in range(L):
@@ -53,15 +58,16 @@ def get_most_confuse(sess, obs):
 def get_random_inv(sess, query):
   ob_pts = [(np.random.randint(0, L), np.random.randint(0,L)) for _ in range(OBS_SIZE)]
   obs = [(op, query(op)) for op in ob_pts]
-  return get_inv(sess, obs)
+  return zip([None] + obs, get_inv_tr(sess, obs))
 
 def get_active_inv(sess, query):
-  rand_guess = (np.random.randint(0,L), np.random.randint(0,L))
-  obs = [(rand_guess, query(rand_guess))]
+  obs = []
 
-  for i in range(OBS_SIZE-1):
+  for i in range(OBS_SIZE):
+    try_inv = get_inv(sess, obs)
     most_conf = get_most_confuse(sess, obs)
+    print "chosen observation ", most_conf
     obs.append((most_conf, query(most_conf)))
 
-  return get_inv(sess, obs)
+  return zip([None] + obs, get_inv_tr(sess, obs))
   
