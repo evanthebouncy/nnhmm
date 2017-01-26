@@ -63,6 +63,31 @@ def get_random_inv(sess, query):
   obs = [(op, query(op)) for op in ob_pts]
   return zip([None] + obs, get_all_preds(sess, obs))
 
+def get_random_inv_direct(sess, query):
+  ob_pts = [(np.random.randint(0, L), np.random.randint(0,L)) for _ in range(OBS_SIZE)]
+  obs = [(op, query(op)) for op in ob_pts]
+  ret =  sess.run([inv_s1_xs[OBS_SIZE],
+                   inv_s1_ys[OBS_SIZE],
+                   inv_s1_os[OBS_SIZE],
+                   inv_s2_xs[OBS_SIZE],
+                   inv_s2_ys[OBS_SIZE],
+                   inv_s2_os[OBS_SIZE]], feed_dict=get_feed_dic_obs(obs))
+  return [x[0] for x in ret]
+
+def get_active_inv_direct(sess, query):
+  obs = []
+  for i in range(OBS_SIZE):
+    most_conf = get_most_confuse(sess, obs)
+    obs.append((most_conf, query(most_conf)))
+  ret =  sess.run([inv_s1_xs[OBS_SIZE],
+                   inv_s1_ys[OBS_SIZE],
+                   inv_s1_os[OBS_SIZE],
+                   inv_s2_xs[OBS_SIZE],
+                   inv_s2_ys[OBS_SIZE],
+                   inv_s2_os[OBS_SIZE]], feed_dict=get_feed_dic_obs(obs))
+  return [x[0] for x in ret]
+  
+
 def get_active_inv(sess, query):
   obs = []
 

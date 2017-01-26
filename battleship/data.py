@@ -2,15 +2,19 @@ import numpy as np
 from draw import *
 
 # total number of observations
-OBS_SIZE = 15
+OBS_SIZE = 20
 # length of the field i.e. LxL field
-L = 8
 N_BATCH = 50
 
 RAND_HIT = 0.4
 
-S1DIM = (2,4)
-S2DIM = (3,5)
+L = 5
+S1DIM = (1,4)
+S2DIM = (2,2)
+
+# L = 10
+# S1DIM = (2,5)
+# S2DIM = (1,8)
 
 # ------------------------------------------------------------------ helpers
 
@@ -43,7 +47,7 @@ def is_legal(ship_coords):
   # check dup
   if len(set(ship_coords)) != len(ship_coords): return False
   for sc in ship_coords:
-    ul, lr = sc
+    ul, lr, _ = sc
     if not in_bound(ul):
       return False
     if not in_bound(lr):
@@ -76,18 +80,20 @@ def gen_X():
   sc1_orient = np.random.random() > 0.5
   sub1_x = S1DIM[0] if sc1_orient else S1DIM[1]
   sub1_y = S1DIM[1] if sc1_orient else S1DIM[0]
-  sc1_ul = np.random.randint(0, L-sub1_x), np.random.randint(0, L-sub1_y)
+  sc1_ul = np.random.randint(0, L-sub1_x+1), np.random.randint(0, L-sub1_y+1)
   sc1_lr = (sc1_ul[0] + S1DIM[0]-1, sc1_ul[1] + S1DIM[1]-1) if sc1_orient\
             else (sc1_ul[0] + S1DIM[1]-1, sc1_ul[1] + S1DIM[0]-1)
 
   sc2_orient = np.random.random() > 0.5
   sub2_x = S2DIM[0] if sc2_orient else S2DIM[1]
   sub2_y = S2DIM[1] if sc2_orient else S2DIM[0]
-  sc2_ul = np.random.randint(0, L-sub2_x), np.random.randint(0, L-sub2_y)
+  sc2_ul = np.random.randint(0, L-sub2_x+1), np.random.randint(0, L-sub2_y+1)
   sc2_lr = (sc2_ul[0] + S2DIM[0]-1, sc2_ul[1] + S2DIM[1]-1) if sc2_orient\
             else (sc2_ul[0] + S2DIM[1]-1, sc2_ul[1] + S2DIM[0]-1)
 
-  ship_coords = [(sc1_ul, sc1_lr), (sc2_ul, sc2_lr)]
+  sc1_orient_b = (1.0, 0.0) if sc1_orient else (0.0, 1.0)
+  sc2_orient_b = (1.0, 0.0) if sc2_orient else (0.0, 1.0)
+  ship_coords = [(sc1_ul, sc1_lr, sc1_orient_b), (sc2_ul, sc2_lr, sc2_orient_b)]
   if is_legal(ship_coords):
     return ship_coords
   else:
@@ -141,6 +147,13 @@ def gen_O(X):
 # all variables are a list of tensors of dimention [n_batch x ...]   
 def gen_data(n_batch = N_BATCH):
   # each element of shape [batch x ...]
+  s1_x = []
+  s1_y = []
+  s1_o = []
+  s2_x = []
+  s2_y = []
+  s2_o = []
+  
   obs_x = [[] for i in range(OBS_SIZE)]
   obs_y = [[] for i in range(OBS_SIZE)]
   obs_tfs = [[] for i in range(OBS_SIZE)]
@@ -151,6 +164,21 @@ def gen_data(n_batch = N_BATCH):
   for bb in range(n_batch):
     # generate a hidden variable X
     ships = gen_X()
+
+    # encode the ships in
+    ship1 = ships[0]
+    ship2 = ships[1]
+    # upper left coordinate and a bit for orientation
+    ship1_c, ship1_o = ship1[0], ship1[2]
+    ship2_c, ship2_o = ship2[0], ship2[2]
+    _s1_x, _s1_y = vectorize(ship1_c)
+    _s2_x, _s2_y = vectorize(ship2_c)
+    s1_x.append(_s1_x)
+    s1_y.append(_s1_y)
+    s1_o.append(ship1_o)
+    s2_x.append(_s2_x)
+    s2_y.append(_s2_y)
+    s2_o.append(ship2_o)
 
     # generate new observation
     _new_ob_coord, _new_ob_lab = gen_O(ships)
@@ -167,7 +195,13 @@ def gen_data(n_batch = N_BATCH):
       obs_y[ob_idx].append(_ob_y)
       obs_tfs[ob_idx].append(_ob_lab)
 
-  return  np.array(obs_x, np.float32),\
+  return  np.array(s1_x, np.float32),\
+          np.array(s1_y, np.float32),\
+          np.array(s1_o, np.float32),\
+          np.array(s2_x, np.float32),\
+          np.array(s2_y, np.float32),\
+          np.array(s2_o, np.float32),\
+          np.array(obs_x, np.float32),\
           np.array(obs_y, np.float32),\
           np.array(obs_tfs, np.float32),\
           np.array(new_ob_x, np.float32),\

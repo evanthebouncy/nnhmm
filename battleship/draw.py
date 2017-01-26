@@ -70,6 +70,7 @@ def draw_trace(trace, name):
 #    anno.append("X"+str(i))
 
     if ob != None:
+      print ob
       ob_coord, ob_outcome = ob
       x_coords.append(ob_coord[0])
       y_coords.append(ob_coord[1])
@@ -99,7 +100,8 @@ def draw_all_preds(all_preds, name):
   for qq, labb in all_preds:
     i, j = qq
     # ret[i][j][0] = 1.0 if labb[0] > labb[1] else 0.0
-    ret[i][j][0] = labb[0]
+    # ret[i][j][0] = labb[0]
+    ret[i][j][0] = 1.0 - abs(labb[0] - labb[1])
   
   draw(ret, name)
   

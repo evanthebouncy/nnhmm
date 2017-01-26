@@ -8,7 +8,14 @@ print Obs
 
 draw_obs(Obs, "test_Os.png")
 
-obs_x, obs_y, obs_tfs, new_ob_x, new_ob_y, new_ob_tf = gen_data()
+s1_x, s1_y, s1_o, s2_x, s2_y, s2_o, obs_x, obs_y, obs_tfs, new_ob_x, new_ob_y, new_ob_tf = gen_data()
+
+print show_dim(s1_x)
+print show_dim(s1_y)
+print show_dim(s1_o)
+print show_dim(s2_x)
+print show_dim(s2_y)
+print show_dim(s2_o)
 print show_dim(obs_x)
 print show_dim(obs_y)
 print show_dim(obs_tfs)
