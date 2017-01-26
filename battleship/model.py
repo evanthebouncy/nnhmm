@@ -76,31 +76,24 @@ b_ob_enc = bias_variable([n_hidden])
 VAR_inv += [W_ob_enc, b_ob_enc]
 VAR_pred += [W_ob_enc, b_ob_enc]
 
-num_hidden = 24
-cell = tf.nn.rnn_cell.LSTMCell(n_hidden,state_is_tuple=True)
+hidden_rollin = hidden_tile
+hiddens = [hidden_rollin]
+for i in range(OBS_SIZE):
+  print "volvoing input ", i
+  ob_xx = ph_obs_x[i]
+  ob_yy = ph_obs_y[i]
+  ob_tf = ph_obs_tf[i]
+  print "input dim ", show_dim(ob_xx), show_dim(ob_yy)
+  # concatenate the hidden with the input into a joint channal
+  hidden_cat_ob = tf.concat(1, [hidden_rollin, ob_xx, ob_yy, ob_tf])
+  # print "concat dim of hidden and ob ", show_dim(hidden_cat_ob)
+  # convolve them into the new hidden representation 
+  hidden_rollin = tf.nn.relu(tf.matmul(hidden_cat_ob, W_ob_enc) + b_ob_enc)
 
-# hidden_rollin = hidden_tile
-# hiddens = [hidden_rollin]
-# for i in range(OBS_SIZE):
-#   print "volvoing input ", i
-#   ob_xx = ph_obs_x[i]
-#   ob_yy = ph_obs_y[i]
-#   ob_tf = ph_obs_tf[i]
-#   print "input dim ", show_dim(ob_xx), show_dim(ob_yy)
-#   # concatenate the hidden with the input into a joint channal
-#   #hidden_cat_ob = tf.concat(1, [hidden_rollin, ob_xx, ob_yy, ob_tf])
-#   cat_ob = tf.concat(1, [ob_xx, ob_yy, ob_tf])
-#   # print "concat dim of hidden and ob ", show_dim(hidden_cat_ob)
-#   # convolve them into the new hidden representation 
-#   hidden_rollin = tf.nn.relu(tf.matmul(hidden_cat_ob, W_ob_enc) + b_ob_enc)
-# 
-#   hiddens.append(hidden_rollin)
-#   print "rollin dim after takin in inputs ", show_dim(hidden_rollin)
-# 
-# print "hidden shape ", show_dim(hiddens)
-val, state = tf.nn.dynamic_rnn(cell, data, dtype=tf.float32)
+  hiddens.append(hidden_rollin)
+  print "rollin dim after takin in inputs ", show_dim(hidden_rollin)
 
-assert 0
+print "hidden shape ", show_dim(hiddens)
 
 # ----------------------------------------------------------------- answer the inversion
 W_inv_s1_x = weight_variable([n_hidden, L])
