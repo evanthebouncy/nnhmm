@@ -67,7 +67,8 @@ state = tf.zeros([N_BATCH, n_hidden])
 # ------------------------------------------------------------------ convolve in the observations
 
 # initialize some weights
-lstm = tf.nn.rnn_cell.LSTMCell(n_hidden/2)
+# stacked lstm
+lstm = tf.nn.rnn_cell.MultiRNNCell([tf.nn.rnn_cell.LSTMCell(100), tf.nn.rnn_cell.LSTMCell(100)])
 
 hiddens = [state]
 
