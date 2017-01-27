@@ -2,19 +2,19 @@ import numpy as np
 from draw import *
 
 # total number of observations
-OBS_SIZE = 10
+OBS_SIZE = 20
 # length of the field i.e. LxL field
 N_BATCH = 50
 
 RAND_HIT = 0.4
 
-L = 5
-S1DIM = (1,4)
-S2DIM = (2,2)
+# L = 5
+# S1DIM = (1,4)
+# S2DIM = (2,2)
 
-# L = 10
-# S1DIM = (2,5)
-# S2DIM = (1,8)
+L = 10
+S1DIM = (2,5)
+S2DIM = (1,8)
 
 # ------------------------------------------------------------------ helpers
 

@@ -163,7 +163,7 @@ cost_query_pred = sum(query_pred_costs)
 
 
 # ------------------------------------------------------------------------ training steps
-optimizer = tf.train.RMSPropOptimizer(0.001)
+optimizer = tf.train.RMSPropOptimizer(0.0002)
 train_query_pred = optimizer.minimize(cost_query_pred, var_list = VAR_pred)
 train_inv = optimizer.minimize(cost_inv, var_list = VAR_inv)
 # Before starting, initialize the variables.  We will 'run' this first.
