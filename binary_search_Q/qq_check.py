@@ -42,10 +42,13 @@ with tf.Session() as sess:
   tracee = gen_trace(sess, qq1, envs)
   print len(tracee), " ", len(tracee[0])
   print "let us look at a particular trace"
-  tracee0 = tracee[0]
+  tracee0 = tracee[0][0]
   for exp in tracee0:
     s, a, ss, r = exp
     print show_state(s), np.argmax(a)
+  print "lets look at the guess"
+  print tracee[0][1]
+
 
 
 

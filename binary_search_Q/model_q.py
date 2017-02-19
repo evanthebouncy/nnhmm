@@ -58,6 +58,14 @@ class Qnetwork():
 
     self.qs = [tf.matmul(hidden ,W_q) + b_q for hidden in hiddens]
 
+    # ----------------------------------------------------------- guess the hidden hypothesis
+    last_state = hiddens[-1]
+    W_guess = weight_variable([self.n_hidden, L])
+    b_guess = bias_variable([L])
+    self.VAR += [W_guess, b_guess]
+
+    self.guess = tf.nn.softmax(tf.matmul(last_state, W_guess) + b_guess)
+
   # clone weights from another network
   def clone_from(self, sess, other):
     copy_ops = []
@@ -93,6 +101,23 @@ class Qnetwork():
     actionz = sess.run(self.qs[state_idx], feed_dict=fed_dic)
     return actionz
 
+  def get_guess(self, sess, states_batch):
+    fed_obs_x =  [np.zeros(shape=[N_BATCH,L]) for _ in range(OBS_SIZE)]
+    fed_obs_tf = [np.zeros(shape=[N_BATCH,2]) for _ in range(OBS_SIZE)]
+
+    state_idx = len(states_batch[0])
+    for batch_id, s_b in enumerate(states_batch):
+      assert len(s_b) == OBS_SIZE, "how can I guess without full observation"
+      for state_id, s in enumerate(s_b):
+        s_x, s_tf = s
+        fed_obs_x[state_id][batch_id] = s_x
+        fed_obs_tf[state_id][batch_id] = s_tf
+
+    fed_dic = self.gen_feed_dict(fed_obs_x, fed_obs_tf)
+    guess = sess.run(self.guess, feed_dict=fed_dic)
+    return guess
+
+
   def fake_change(self, sess):
     cur_val = sess.run(self.VAR[0])
     change_op = self.VAR[0].assign(cur_val + cur_val)
@@ -118,6 +143,10 @@ def gen_trace(sess, qnet, envs):
       new_states.append(ss)
 
     states = new_states
+
+  # take a guess in the end
+  guess = qnet.get_guess(sess, states)
+  ret = zip(ret, guess)
 
   return ret
       
