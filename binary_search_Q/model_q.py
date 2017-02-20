@@ -20,11 +20,27 @@ class Qnetwork():
     self.VAR = []
 
     # inputs
-    self.ph_x_x = tf.placeholder(tf.float32, [N_BATCH, L], name="ph_x_x")
     self.ph_obs_x = [tf.placeholder(tf.float32, [N_BATCH, L], 
             name="ph_ob_x"+str(i)) for i in range(OBS_SIZE)]
     self.ph_obs_tf = [tf.placeholder(tf.float32, [N_BATCH, 2],
             name="ph_ob_tf"+str(k)) for k in range(OBS_SIZE)]
+
+
+    # inputs for learning only
+    # the target for an action
+    self.learn_a = [tf.placeholder(tf.float32, [N_BATCH], 
+            name="learn_a"+str(i)) for i in range(OBS_SIZE)]
+    # a mask telling you which action it is
+    self.learn_a_mask = [tf.placeholder(tf.float32, [N_BATCH, L], 
+            name="learn_a_mask"+str(i)) for i in range(OBS_SIZE)]
+    # a mask telling you on which batch this action actually mattered
+    self.learn_a_batch_mask = [tf.placeholder(tf.float32, [N_BATCH], 
+            name="learn_a_batch_mask"+str(i)) for i in range(OBS_SIZE)]
+    # the supervised value for the tru guess, use this for xentropy
+    self.learn_guess = tf.placeholder(tf.float32, [N_BATCH, L], name="learn_guess")
+    # a mask telling you which batch this guess actually mattered
+    self.learn_guess_batch_mask = tf.placeholder(tf.float32, [N_BATCH],
+            name="learn_guess_batch_mask")
 
     # lstm initial state
     state = tf.zeros([N_BATCH, self.n_hidden])
@@ -65,6 +81,25 @@ class Qnetwork():
     self.VAR += [W_guess, b_guess]
 
     self.guess = tf.nn.softmax(tf.matmul(last_state, W_guess) + b_guess)
+
+    # -------------------------------------------------------------- the networks for learning
+    # learning the actions
+    blah = [tf.reduce_sum(self.qs[i] * self.learn_a_mask[i], 1) for i in range(OBS_SIZE)]
+    print show_dim(blah)
+    batch_costs = [self.learn_a_batch_mask[i] * tf.square(blah[i] - self.learn_a[i])\
+                   for i in range(OBS_SIZE)]
+    print show_dim(batch_costs)
+    cost_act = sum([tf.reduce_sum(x) for x in batch_costs])
+    print show_dim(cost_act)
+
+    # learning the guesses
+    blah2 = tf.reduce_sum(self.learn_guess * tf.log(self.guess), 1)
+    cost_guess = tf.reduce_sum(self.learn_guess_batch_mask * blah2)
+    print show_dim(cost_guess)
+
+    self.cost = cost_act + cost_guess
+    self.optimizer = tf.train.RMSPropOptimizer(0.0002)
+    self.train_node = self.optimizer.minimize(self.cost, var_list = self.VAR)
 
   # clone weights from another network
   def clone_from(self, sess, other):
@@ -115,7 +150,8 @@ class Qnetwork():
 
     state_idx = len(states_batch[0])
     for batch_id, s_b in enumerate(states_batch):
-      assert len(s_b) == OBS_SIZE, "how can I guess without full observation"
+      # supresed for now
+      # assert len(s_b) == OBS_SIZE, "how can I guess without full observation"
       for state_id, s in enumerate(s_b):
         s_x, s_tf = s
         fed_obs_x[state_id][batch_id] = s_x
@@ -144,8 +180,8 @@ class Experience:
   def add(self, trace):
     for exp in trace[:-1]:
       self.buf.append(exp)
-    last_s, guess, true_hidden, guess_xentropy = trace[-1]
-    self.buf.append((last_s, None, true_hidden, None))
+    last_s, guess, last_s_again, guess_xentropy, true_hidden, _ = trace[-1]
+    self.buf.append((last_s, None, last_s, guess_xentropy, true_hidden, "guess"))
      
     self.trim()
   
@@ -156,20 +192,24 @@ class Experience:
 # trace generation ! ! !
 def gen_batch_trace(sess, qnet, envs):
   ret = [[] for _ in range(N_BATCH)]
-
+  truths = [eenv.X for eenv in envs]
   # start with the empty trace
   states = [[] for _ in range(N_BATCH)]
 
   for _ in range(OBS_SIZE):
     new_states = []
 
+    # all the moves that involves a query
     actions = qnet.get_action(sess, states)
     for batch_id in range(N_BATCH):
+      # we need to put truth as the last case in case ss is the final state
+      # this way we can compute the V(ss) using the target Qnetwork
+      trutru = truths[batch_id] if _ == OBS_SIZE - 1 else None
       env = envs[batch_id]
       s = states[batch_id]
       act = actions[batch_id]
       ss, r = env.step(s, act)
-      ret[batch_id].append((s, np.argmax(act), ss, r))
+      ret[batch_id].append((s, np.argmax(act), ss, r, trutru, "query"))
       new_states.append(ss)
 
     states = new_states
@@ -178,7 +218,8 @@ def gen_batch_trace(sess, qnet, envs):
   guess = qnet.get_guess(sess, states)
   guess_con_env = zip(guess, envs)
   guess_reward = [x[1].get_final_reward(x[0])  for x in guess_con_env]
-  last_experience = zip(states, guess, [eenv.X for eenv in envs], guess_reward)
+  last_experience = zip(states, guess, states, 
+                        guess_reward, truths, ["guess" for _ in range(N_BATCH)])
 
   for i_batch in range(N_BATCH):
     ret[i_batch].append(last_experience[i_batch])
@@ -186,15 +227,37 @@ def gen_batch_trace(sess, qnet, envs):
       
 # target generation ! !
 # experience is many many (s, a, s', r)
-# we want to conver them with target into (s, a, target)
-# if s is the FINAL state before our prediction, leave it as (s, a, None) just learn with supervised
+# we want to conver them with target into ("query", s, a, target)
+# if s is the FINAL state before our prediction, leave it as ("guess", s, a, truth) just learn with supervised using the truth
 # if s' is the FINAL state, then we use xentropy with Q_targets last step to get target
 # otherwise we use max_{a'}Q(s',a') for the a' as the query step
-# def gen_target(sess, qnet_target, envs, batch_experience):
-#   ret = []
-#   for 
-      
+def gen_target(sess, qnet_target, batch_experience):
+  ret = []
+  s_s = [x[0] for x in batch_experience]
+  ss_s = [x[2] for x in batch_experience]
+  all_qs = qnet_target.get_action(sess, s_s)
+  guesses = qnet_target.get_guess(sess, ss_s)
 
+  for batch_id, exp in enumerate(batch_experience):
+    s, a, ss, r, truth, typ = exp
+    # if it is a ultimate state, i.e. a guess, train it supervised and just pass it on
+    if typ == "guess":
+      ret.append(("guess", s, a, truth))
+    if typ == "query":
+      # if this is the penultimate state
+      # use the Q to find out V(ss) from guess 
+      if truth != None:
+        tru_1hot = onehot(truth, L)
+        target_guess = guesses[batch_id]
+        targ = xentropy(tru_1hot, target_guess) + r
+        ret.append(("query", s, a, targ))
+      # if this is just a normal query state
+      # use the Q to find out V(ss) from argmax over actions
+      else:
+        qaction = all_qs[len(ss)][batch_id] 
+        targ = np.max(qaction) + r
+        ret.append(("query", s, a, targ))
+  return ret
 
 
 

@@ -55,7 +55,15 @@ with tf.Session() as sess:
     experiences.add(tr)
 
   print "A sample of experience "
-  print experiences.sample()
+  a_sample = experiences.sample()
+  for xx in a_sample:
+    print len(xx), " ", xx
+  print "END"
+
+  print "generating target from sample"
+  target = gen_target(sess, qq2, a_sample)
+  for tg in target:
+    print tg
 
 
 
