@@ -32,25 +32,30 @@ with tf.Session() as sess:
   print "action size ", len(qs)
 
   action1 = qq1.get_action(sess, [[] for _ in range(N_BATCH)])
-  print action1
   print show_dim(action1)
 
 envs = get_envs()
+experiences = Experience(5000)
+
 with tf.Session() as sess:
   sess.run(tf.initialize_all_variables())
   print "HEYA"
-  tracee = gen_trace(sess, qq1, envs)
+  tracee = gen_batch_trace(sess, qq1, envs)
   print len(tracee), " ", len(tracee[0])
-  print "let us look at a particular trace"
-  tracee0 = tracee[0][0]
-  for exp in tracee0:
-    s, a, ss, r = exp
-    print show_state(s), np.argmax(a)
-  print "lets look at the guess"
-  print tracee[0][1]
+  print "for a particular trace "
+  for xxxx in tracee[0]:
+    print "HI HI HI"
+    print len(xxxx)
+    print xxxx
+  print "END"
+  print envs[0].X
 
+  print "Add to experience"
+  for tr in tracee:
+    experiences.add(tr)
 
-
+  print "A sample of experience "
+  print experiences.sample()
 
 
 

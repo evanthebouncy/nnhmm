@@ -130,6 +130,15 @@ def gen_data(n_batch = N_BATCH):
           np.array(new_ob_x, np.float32),\
           np.array(new_ob_tf, np.float32)
 
+# get the cross entropy between truth and guess
+def xentropy(truth, guess):
+  return -np.sum(truth * np.log(guess))
+
+def onehot(num, length):
+  ret = np.zeros([length])
+  ret[num] = 1.0
+  return ret
+
 # ------------------------------------------------------------------------------ FOR RL
 class Env:
   def __init__(self, X):
@@ -140,7 +149,12 @@ class Env:
     a_int = np.argmax(a)
     answer = self.query(a_int)
     # have 0.0 for reward now
-    return (s + [(a, answer)], 0.0)
+    return (s + [(a_int, answer)], 0.0)
+
+  def get_final_reward(self, guess):
+    true_answer = onehot(self.X, L)
+    return xentropy(true_answer, guess)
+    
 
 
 def get_envs():

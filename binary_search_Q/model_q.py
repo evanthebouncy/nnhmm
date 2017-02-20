@@ -86,19 +86,27 @@ class Qnetwork():
     actionz = sess.run(self.qs, feed_dict = fed_dic)
     return actionz
 
+  # get action on the current state batch
   def get_action(self, sess, states_batch):
     fed_obs_x =  [np.zeros(shape=[N_BATCH,L]) for _ in range(OBS_SIZE)]
     fed_obs_tf = [np.zeros(shape=[N_BATCH,2]) for _ in range(OBS_SIZE)]
 
-    state_idx = len(states_batch[0])
+    state_idxs = [len(xxxx) for xxxx in states_batch]
     for batch_id, s_b in enumerate(states_batch):
       for state_id, s in enumerate(s_b):
         s_x, s_tf = s
+        s_x = onehot(s_x, L) 
         fed_obs_x[state_id][batch_id] = s_x
         fed_obs_tf[state_id][batch_id] = s_tf
 
-    fed_dic = self.gen_feed_dict(fed_obs_x, fed_obs_tf)
-    actionz = sess.run(self.qs[state_idx], feed_dict=fed_dic)
+    # fed_dic = self.gen_feed_dict(fed_obs_x, fed_obs_tf)
+    # actionz = sess.run(self.qs[state_idxs[0]], feed_dict=fed_dic)
+    # print show_dim(actionz)
+
+    all_acts = self.get_all_actions(sess, fed_obs_x, fed_obs_tf)
+    actionz = []
+    for batch_idx in range(N_BATCH):
+      actionz.append(all_acts[state_idxs[batch_idx]][batch_idx]) 
     return actionz
 
   def get_guess(self, sess, states_batch):
@@ -123,8 +131,30 @@ class Qnetwork():
     change_op = self.VAR[0].assign(cur_val + cur_val)
     sess.run(change_op)
 
-# trace generation! ! !
-def gen_trace(sess, qnet, envs):
+class Experience:
+  
+  def __init__(self, buf_len):
+    self.buf = []
+    self.buf_len = buf_len
+
+  def trim(self):
+    while len(self.buf) > self.buf_len:
+      self.buf.pop()
+
+  def add(self, trace):
+    for exp in trace[:-1]:
+      self.buf.append(exp)
+    last_s, guess, true_hidden, guess_xentropy = trace[-1]
+    self.buf.append((last_s, None, true_hidden, None))
+     
+    self.trim()
+  
+  def sample(self):
+    idxxs = np.random.choice(len(self.buf), size=N_BATCH, replace=False)
+    return [self.buf[idxxs[i]] for i in range(N_BATCH)]
+
+# trace generation ! ! !
+def gen_batch_trace(sess, qnet, envs):
   ret = [[] for _ in range(N_BATCH)]
 
   # start with the empty trace
@@ -139,17 +169,30 @@ def gen_trace(sess, qnet, envs):
       s = states[batch_id]
       act = actions[batch_id]
       ss, r = env.step(s, act)
-      ret[batch_id].append((s, act, ss, r))
+      ret[batch_id].append((s, np.argmax(act), ss, r))
       new_states.append(ss)
 
     states = new_states
 
   # take a guess in the end
   guess = qnet.get_guess(sess, states)
-  ret = zip(ret, guess)
+  guess_con_env = zip(guess, envs)
+  guess_reward = [x[1].get_final_reward(x[0])  for x in guess_con_env]
+  last_experience = zip(states, guess, [eenv.X for eenv in envs], guess_reward)
 
+  for i_batch in range(N_BATCH):
+    ret[i_batch].append(last_experience[i_batch])
   return ret
       
+# target generation ! !
+# experience is many many (s, a, s', r)
+# we want to conver them with target into (s, a, target)
+# if s is the FINAL state before our prediction, leave it as (s, a, None) just learn with supervised
+# if s' is the FINAL state, then we use xentropy with Q_targets last step to get target
+# otherwise we use max_{a'}Q(s',a') for the a' as the query step
+# def gen_target(sess, qnet_target, envs, batch_experience):
+#   ret = []
+#   for 
       
 
 
