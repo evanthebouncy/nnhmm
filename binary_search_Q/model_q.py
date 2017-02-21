@@ -78,9 +78,10 @@ class Qnetwork():
     last_state = hiddens[-1]
     W_guess = weight_variable([self.n_hidden, L])
     b_guess = bias_variable([L])
+    e_L = tf.constant(1e-5, shape=[N_BATCH, L])
     self.VAR += [W_guess, b_guess]
 
-    self.guess = tf.nn.softmax(tf.matmul(last_state, W_guess) + b_guess)
+    self.guess = tf.nn.softmax(tf.matmul(last_state, W_guess) + b_guess + e_L)
 
     # -------------------------------------------------------------- the networks for learning
     # learning the actions
@@ -121,43 +122,36 @@ class Qnetwork():
     actionz = sess.run(self.qs, feed_dict = fed_dic)
     return actionz
 
-  # get action on the current state batch
-  def get_action(self, sess, states_batch):
+  def get_states_batch_dict(self, states_batch):
     fed_obs_x =  [np.zeros(shape=[N_BATCH,L]) for _ in range(OBS_SIZE)]
     fed_obs_tf = [np.zeros(shape=[N_BATCH,2]) for _ in range(OBS_SIZE)]
 
-    state_idxs = [len(xxxx) for xxxx in states_batch]
     for batch_id, s_b in enumerate(states_batch):
       for state_id, s in enumerate(s_b):
         s_x, s_tf = s
         s_x = onehot(s_x, L) 
         fed_obs_x[state_id][batch_id] = s_x
         fed_obs_tf[state_id][batch_id] = s_tf
+    fed_dic = self.gen_feed_dict(fed_obs_x, fed_obs_tf)
+    return fed_dic
 
+  # get action on the current state batch
+  def get_action(self, sess, states_batch):
+
+    state_idxs = [len(xxxx) for xxxx in states_batch]
     # fed_dic = self.gen_feed_dict(fed_obs_x, fed_obs_tf)
     # actionz = sess.run(self.qs[state_idxs[0]], feed_dict=fed_dic)
     # print show_dim(actionz)
 
-    all_acts = self.get_all_actions(sess, fed_obs_x, fed_obs_tf)
+    fed_dic = self.get_states_batch_dict(states_batch)
+    all_acts = sess.run(self.qs, feed_dict = fed_dic)
     actionz = []
     for batch_idx in range(N_BATCH):
       actionz.append(all_acts[state_idxs[batch_idx]][batch_idx]) 
     return actionz
 
   def get_guess(self, sess, states_batch):
-    fed_obs_x =  [np.zeros(shape=[N_BATCH,L]) for _ in range(OBS_SIZE)]
-    fed_obs_tf = [np.zeros(shape=[N_BATCH,2]) for _ in range(OBS_SIZE)]
-
-    state_idx = len(states_batch[0])
-    for batch_id, s_b in enumerate(states_batch):
-      # supresed for now
-      # assert len(s_b) == OBS_SIZE, "how can I guess without full observation"
-      for state_id, s in enumerate(s_b):
-        s_x, s_tf = s
-        fed_obs_x[state_id][batch_id] = s_x
-        fed_obs_tf[state_id][batch_id] = s_tf
-
-    fed_dic = self.gen_feed_dict(fed_obs_x, fed_obs_tf)
+    fed_dic = self.get_states_batch_dict(states_batch)
     guess = sess.run(self.guess, feed_dict=fed_dic)
     return guess
 
@@ -166,6 +160,23 @@ class Qnetwork():
     cur_val = sess.run(self.VAR[0])
     change_op = self.VAR[0].assign(cur_val + cur_val)
     sess.run(change_op)
+
+  def learn(self, sess, learn_stuff):
+    sb, learn_a, learn_a_mask, learn_a_batch_mask, learn_guess, learn_guess_batch_mask = learn_stuff
+
+    fed_dic = self.get_states_batch_dict(sb)
+    for a, b in zip(self.learn_a, learn_a):
+      fed_dic[a] = b
+    for a, b in zip(self.learn_a_mask, learn_a_mask):
+      fed_dic[a] = b
+    for a, b in zip(self.learn_a_batch_mask, learn_a_batch_mask):
+      fed_dic[a] = b
+    fed_dic[self.learn_guess] = learn_guess
+    fed_dic[self.learn_guess_batch_mask] = learn_guess_batch_mask
+
+    sess.run(self.train_node, feed_dict = fed_dic)
+    print "WOHEW"
+    
 
 class Experience:
   
@@ -209,7 +220,7 @@ def gen_batch_trace(sess, qnet, envs):
       s = states[batch_id]
       act = actions[batch_id]
       ss, r = env.step(s, act)
-      ret[batch_id].append((s, np.argmax(act), ss, r, trutru, "query"))
+      ret[batch_id].append((s, np.argmin(act), ss, r, trutru, "query"))
       new_states.append(ss)
 
     states = new_states
@@ -230,7 +241,7 @@ def gen_batch_trace(sess, qnet, envs):
 # we want to conver them with target into ("query", s, a, target)
 # if s is the FINAL state before our prediction, leave it as ("guess", s, a, truth) just learn with supervised using the truth
 # if s' is the FINAL state, then we use xentropy with Q_targets last step to get target
-# otherwise we use max_{a'}Q(s',a') for the a' as the query step
+# otherwise we use min_{a'}Q(s',a') for the a' as the query step
 def gen_target(sess, qnet_target, batch_experience):
   ret = []
   s_s = [x[0] for x in batch_experience]
@@ -252,18 +263,41 @@ def gen_target(sess, qnet_target, batch_experience):
         targ = xentropy(tru_1hot, target_guess) + r
         ret.append(("query", s, a, targ))
       # if this is just a normal query state
-      # use the Q to find out V(ss) from argmax over actions
+      # use the Q to find out V(ss) from argmin over actions
       else:
         qaction = all_qs[len(ss)][batch_id] 
-        targ = np.max(qaction) + r
+        targ = np.min(qaction) + r
         ret.append(("query", s, a, targ))
   return ret
 
+# generate the target feed for the network
+def prepare_target_feed(targets):
+  learn_a = [np.zeros([N_BATCH]) for _ in range(OBS_SIZE)]
+  learn_a_mask = [np.zeros([N_BATCH, L]) for _ in range(OBS_SIZE)]
+  learn_a_batch_mask = [np.zeros([N_BATCH]) for _ in range(OBS_SIZE)]
 
+  learn_guess = np.zeros([N_BATCH, L])
+  learn_guess_batch_mask = np.zeros([N_BATCH])
 
+  state_batch = []
 
+  for batch_id, tgt in enumerate(targets):
+    typ, s, a, _tg = tgt
+    state_batch.append(s)
+    if typ == "query":
+      act_idx = len(s)
+      act_value = _tg
+      act_1hot = onehot(a, L)
+      learn_a[act_idx][batch_id] = act_value
+      learn_a_mask[act_idx][batch_id] = act_1hot
+      learn_a_batch_mask[act_idx][batch_id] = 1.0
 
+    if typ == "guess":
+      learn_guess[batch_id] = onehot(_tg, L)
+      learn_guess_batch_mask[batch_id] = 1.0
 
+  return state_batch, learn_a, learn_a_mask, learn_a_batch_mask, learn_guess, learn_guess_batch_mask
+    
 
 
 

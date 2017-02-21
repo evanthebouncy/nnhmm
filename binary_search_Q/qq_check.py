@@ -39,11 +39,26 @@ experiences = Experience(5000)
 
 with tf.Session() as sess:
   sess.run(tf.initialize_all_variables())
-  print "HEYA"
+  print "clone qq2"
+  qq2.clone_from(sess, qq1)
+
+  print "comparing trace from qq1 and qq2"
+  print "HEYA trace from qq1"
   tracee = gen_batch_trace(sess, qq1, envs)
   print len(tracee), " ", len(tracee[0])
   print "for a particular trace "
   for xxxx in tracee[0]:
+    print "HI HI HI"
+    print len(xxxx)
+    print xxxx
+  print "END"
+  print envs[0].X
+
+  print "HEYA trace from qq1"
+  tracee2 = gen_batch_trace(sess, qq2, envs)
+  print len(tracee2), " ", len(tracee2[0])
+  print "for a particular trace "
+  for xxxx in tracee2[0]:
     print "HI HI HI"
     print len(xxxx)
     print xxxx
@@ -56,15 +71,44 @@ with tf.Session() as sess:
 
   print "A sample of experience "
   a_sample = experiences.sample()
-  for xx in a_sample:
-    print len(xx), " ", xx
-  print "END"
+  # for xx in a_sample:
+  #   print len(xx), " ", xx
+  # print "END"
 
   print "generating target from sample"
   target = gen_target(sess, qq2, a_sample)
-  for tg in target:
-    print tg
+  # for tg in target:
+  #   print tg
 
+  print "preparing the feeder "
+  _sb, _a, _am, _abm, _g, _gm = prepare_target_feed(target)
+  print show_dim(_a)
+  print show_dim(_am)
+  print show_dim(_abm)
+  print show_dim(_g)
+  print show_dim(_gm)
+
+  qq1.learn(sess, (_sb, _a, _am, _abm, _g, _gm))
+
+  print "now qq1 should be bit different from qq2 in the traces"
+  print "qq 1"
+  tracee = gen_batch_trace(sess, qq1, envs)
+  print len(tracee), " ", len(tracee[0])
+  print "for a particular trace "
+  for xxxx in tracee[0]:
+    print "HI HI HI"
+    print len(xxxx)
+    print xxxx
+  print "END"
+  print "qq 2"
+  tracee = gen_batch_trace(sess, qq2, envs)
+  print len(tracee), " ", len(tracee[0])
+  print "for a particular trace "
+  for xxxx in tracee[0]:
+    print "HI HI HI"
+    print len(xxxx)
+    print xxxx
+  print "END"
 
 
 
