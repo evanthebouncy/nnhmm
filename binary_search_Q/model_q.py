@@ -198,7 +198,8 @@ class Experience:
 
   def add(self, trace):
     for exp in trace[:-1]:
-      self.buf.append(exp)
+      s, a, ss, r, trutru, typ = exp
+      self.buf.append((s, np.argmax(a), ss, r, trutru, typ))
     last_s, guess, last_s_again, guess_xentropy, true_hidden, _ = trace[-1]
     self.buf.append((last_s, None, last_s, guess_xentropy, true_hidden, "guess"))
      
@@ -209,7 +210,7 @@ class Experience:
     return [self.buf[idxxs[i]] for i in range(N_BATCH)]
 
 # trace generation ! ! !
-def gen_batch_trace(sess, qnet, envs):
+def gen_batch_trace(sess, qnet, envs, episilon):
   ret = [[] for _ in range(N_BATCH)]
   truths = [eenv.X for eenv in envs]
   # start with the empty trace
@@ -226,12 +227,14 @@ def gen_batch_trace(sess, qnet, envs):
       trutru = truths[batch_id] if _ == OBS_SIZE - 1 else None
       env = envs[batch_id]
       s = states[batch_id]
-      act = actions[batch_id]
+      # random action with episilon probaiblity
+      act = onehot(np.random.randint(L),L)\
+        if np.random.random() < episilon else actions[batch_id] 
       print "state action pair "
       print "s ", s
       print "a ", act
       ss, r = env.step(s, act)
-      ret[batch_id].append((s, np.argmax(act), ss, r, trutru, "query"))
+      ret[batch_id].append((s, act, ss, r, trutru, "query"))
       # ret[batch_id].append((s, np.argmax(act), ss, r, trutru, "query"))
       new_states.append(ss)
 

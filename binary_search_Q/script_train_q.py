@@ -12,7 +12,7 @@ with tf.Session() as sess:
 #  envs = get_envs(0.0)
 
   for episode in range(N_EPI):
-    print "ON EPISODE ", episode
+    print "-------------------------------------------- ON EPISODE ", episode
 
     # target network cloning once in awhile
     if episode % N_CLONE == 0:
@@ -20,9 +20,10 @@ with tf.Session() as sess:
       qq_clone.clone_from(sess, qq)
 
     episilon = 1.0 - float(episode) / N_EPI
-    envs = get_envs(episilon)
+    print "episilon of random move probability ", episilon
+    envs = get_envs()
 
-    trace = gen_batch_trace(sess, qq, envs)
+    trace = gen_batch_trace(sess, qq, envs, episilon)
     print "for this particular trace "
     for xxxx in trace[0]:
       s, a, ss, r, trut, typ = xxxx

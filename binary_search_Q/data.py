@@ -141,16 +141,12 @@ def onehot(num, length):
 
 # ------------------------------------------------------------------------------ FOR RL
 class Env:
-  def __init__(self, X, epi):
+  def __init__(self, X):
     self.X = X
     self.query = mk_query(X)
-    self.epi = epi
 
   def step(self, s, a):
-    a_int = np.argmin(a)
-    # with epi probability take random move
-    if np.random.random() < self.epi:
-      a_int = np.random.randint(0, L)
+    a_int = np.argmax(a)
     answer = self.query(a_int)
     # have 0.0 for reward now
     return (s + [(a_int, answer)], 0.0)
@@ -162,8 +158,8 @@ class Env:
     
 
 
-def get_envs(epi=0.0):
-  return [Env(xx, epi) for xx in [gen_X() for _ in range(N_BATCH)]]
+def get_envs():
+  return [Env(xx) for xx in [gen_X() for _ in range(N_BATCH)]]
 
 def show_state(s):
   ret = []
