@@ -90,16 +90,19 @@ class Qnetwork():
     batch_costs = [self.learn_a_batch_mask[i] * tf.square(blah[i] - self.learn_a[i])\
                    for i in range(OBS_SIZE)]
     print show_dim(batch_costs)
+    self.bac = batch_costs
     cost_act = sum([tf.reduce_sum(x) for x in batch_costs])
+    self.cost_act = cost_act
     print show_dim(cost_act)
 
     # learning the guesses
-    blah2 = tf.reduce_sum(self.learn_guess * tf.log(self.guess), 1)
+    blah2 = -tf.reduce_sum(self.learn_guess * tf.log(self.guess), 1)
     cost_guess = tf.reduce_sum(self.learn_guess_batch_mask * blah2)
+    self.cost_guess = cost_guess
     print show_dim(cost_guess)
 
     self.cost = cost_act + cost_guess
-    self.optimizer = tf.train.RMSPropOptimizer(0.0002)
+    self.optimizer = tf.train.RMSPropOptimizer(0.002)
     self.train_node = self.optimizer.minimize(self.cost, var_list = self.VAR)
 
   # clone weights from another network
@@ -174,9 +177,14 @@ class Qnetwork():
     fed_dic[self.learn_guess] = learn_guess
     fed_dic[self.learn_guess_batch_mask] = learn_guess_batch_mask
 
+    print "costs during training "
+    print sess.run(self.cost, feed_dict = fed_dic)
+#    print sess.run(self.bac, feed_dict = fed_dic)
+#    print sess.run(self.cost_guess, feed_dict = fed_dic)
     sess.run(self.train_node, feed_dict = fed_dic)
-    print "WOHEW"
-    
+    print sess.run(self.cost, feed_dict = fed_dic)
+#    print sess.run(self.bac, feed_dict = fed_dic)
+#    print sess.run(self.cost_guess, feed_dict = fed_dic)
 
 class Experience:
   
@@ -219,8 +227,12 @@ def gen_batch_trace(sess, qnet, envs):
       env = envs[batch_id]
       s = states[batch_id]
       act = actions[batch_id]
+      print "state action pair "
+      print "s ", s
+      print "a ", act
       ss, r = env.step(s, act)
-      ret[batch_id].append((s, np.argmin(act), ss, r, trutru, "query"))
+      ret[batch_id].append((s, np.argmax(act), ss, r, trutru, "query"))
+      # ret[batch_id].append((s, np.argmax(act), ss, r, trutru, "query"))
       new_states.append(ss)
 
     states = new_states
@@ -241,12 +253,12 @@ def gen_batch_trace(sess, qnet, envs):
 # we want to conver them with target into ("query", s, a, target)
 # if s is the FINAL state before our prediction, leave it as ("guess", s, a, truth) just learn with supervised using the truth
 # if s' is the FINAL state, then we use xentropy with Q_targets last step to get target
-# otherwise we use min_{a'}Q(s',a') for the a' as the query step
+# otherwise we use max_{a'}Q(s',a') for the a' as the query step
 def gen_target(sess, qnet_target, batch_experience):
   ret = []
   s_s = [x[0] for x in batch_experience]
   ss_s = [x[2] for x in batch_experience]
-  all_qs = qnet_target.get_action(sess, s_s)
+  next_state_qs = qnet_target.get_action(sess, ss_s)
   guesses = qnet_target.get_guess(sess, ss_s)
 
   for batch_id, exp in enumerate(batch_experience):
@@ -260,13 +272,13 @@ def gen_target(sess, qnet_target, batch_experience):
       if truth != None:
         tru_1hot = onehot(truth, L)
         target_guess = guesses[batch_id]
-        targ = xentropy(tru_1hot, target_guess) + r
+        targ = -xentropy(tru_1hot, target_guess) + r
         ret.append(("query", s, a, targ))
       # if this is just a normal query state
-      # use the Q to find out V(ss) from argmin over actions
+      # use the Q to find out V(ss) from argmax over actions
       else:
-        qaction = all_qs[len(ss)][batch_id] 
-        targ = np.min(qaction) + r
+        qaction = next_state_qs[batch_id] 
+        targ = np.max(qaction) + r
         ret.append(("query", s, a, targ))
   return ret
 

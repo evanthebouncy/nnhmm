@@ -3,10 +3,10 @@ from draw import *
 from world import *
 
 # total number of observations
-L = 100
-OBS_SIZE = 8
+L = 4
+OBS_SIZE = 3
 # length of the field i.e. LxL field
-N_BATCH = 50
+N_BATCH = 10
 
 # ------------------------------------------------------------------ helpers
 
@@ -157,7 +157,8 @@ class Env:
 
   def get_final_reward(self, guess):
     true_answer = onehot(self.X, L)
-    return xentropy(true_answer, guess)
+    ret = -xentropy(true_answer, guess)
+    return ret
     
 
 
