@@ -30,7 +30,6 @@ class Implynet:
 
   # load the model and give back a session
   def load_model(self, sess, saved_loc):
-    self.saver = tf.train.Saver()
     self.saver.restore(sess, saved_loc)
     print("Model restored.")
 
@@ -143,6 +142,7 @@ class Implynet:
     # train_query_pred = optimizer.minimize(cost_query_pred, var_list = VAR_pred)
     # Before starting, initialize the variables.  We will 'run' this first.
     self.init = tf.initialize_all_variables()
+    self.saver = tf.train.Saver()
 
   # save the model
   def save(self, sess, model_loc="model.ckpt"):
@@ -257,12 +257,16 @@ class Implynet:
 
     return most_conf[1]
 
-  def get_active_inv(self, sess, query):
+  def get_active_inv(self, sess, query, epi=0.0):
     obs = []
 
     for i in range(OBS_SIZE):
-      most_conf = self.get_most_confuse(sess, obs)
-      obs.append((most_conf, query(most_conf)))
+      if np.random.random() < epi:
+        rand_coord = sample_coord()
+        obs.append((rand_coord, query(rand_coord)))
+      else:
+        most_conf = self.get_most_confuse(sess, obs)
+        obs.append((most_conf, query(most_conf)))
 
     feed_dic = self.get_feed_dic_obs(obs)
     invs = [(x[0], np.argmax(x[0])) for x in sess.run(self.x_invs, feed_dict=feed_dic)]

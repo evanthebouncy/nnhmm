@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.misc import imresize
+from scipy.ndimage.filters import gaussian_filter
 from tensorflow.examples.tutorials.mnist import input_data
 mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
 
@@ -24,6 +25,7 @@ def black_white(img):
   new_img[mask_pos] = 1.0
   new_img[mask_neg] = 0.0
   return new_img
+
 
 def vectorize(coords):
   retX, retY = np.zeros([L]), np.zeros([L])
@@ -90,7 +92,7 @@ def sample_coord_bias(qq):
 
 def gen_O(X):
   query = mk_query(X)
-  Ox, Oy = sample_coord(query)
+  Ox, Oy = sample_coord()
   O = (Ox, Oy)
   return O, query(O) 
 
@@ -101,8 +103,8 @@ def get_img_class(test=False):
 
   img = np.reshape(img[0], [2*L,2*L])                                                           
   # rescale the image to 14 x 14
-  img = imresize(img, (14,14), interp='nearest') / 255.0                      
-  img = imresize(img, (14,14)) / 255.0                      
+  # img = imresize(img, (14,14), interp='nearest') / 255.0                      
+  img = gaussian_filter(imresize(img, (14,14)) / 255.0, 0.11)
   img = black_white(img)
   return img, _x
 

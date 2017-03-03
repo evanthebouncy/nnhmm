@@ -11,7 +11,7 @@ restart = False
 train_unsupervised = False
 
 
-exp = Experience(10000)
+exp = Experience(2000)
 impnet = Implynet()
 sess = tf.Session()
 
@@ -23,21 +23,23 @@ if train_unsupervised:
     exp.add(blah)
 
   if restart:
-    sess.run(init)
+    sess.run(impnet.init)
   else:
     impnet.load_model(sess, "model.ckpt")
 
+  epi = 1.0
   for i in xrange(1000000):
-    print i
+    epi = 0.9 ** mnist.train.epochs_completed
+    print i, " epsilon ", epi, " epoch num", mnist.train.epochs_completed
     # train it on a sample of expeirence
     impnet.train(sess, data_from_exp(exp))
 
     # add a random sample ?
-    exp.add(gen_rand_trace())
+    # exp.add(gen_rand_trace())
     # add an active sample
     imga, xa = get_img_class()
     qry = mk_query(imga)
-    act_inv = impnet.get_active_inv(sess, qry)
+    act_inv = impnet.get_active_inv(sess, qry, epi)
     act_tr = full_output_to_trace(act_inv, imga, xa)
     exp.add(act_tr)
 
@@ -56,7 +58,7 @@ if not train_unsupervised:
   impnet.load_model(sess, "model.ckpt")
 
   # add some initial stuff
-  init_trs = [gen_rand_trace() for _ in range(9 * N_BATCH)]
+  init_trs = [gen_rand_trace() for _ in range(10 * N_BATCH)]
   for blah in init_trs:
     exp.add(blah)
 
