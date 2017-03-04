@@ -2,13 +2,20 @@ import tensorflow as tf
 import numpy as np
 from data import *
 
-def weight_variable(shape):
+def weight_variable(shape, name=None):
   initial = tf.truncated_normal(shape, stddev=0.1)
-  return tf.Variable(initial)
+  if name:
+    return tf.Variable(initial, name)
+  else:
+    return tf.Variable(initial)
 
-def bias_variable(shape):
+
+def bias_variable(shape, name=None):
   initial = tf.constant(0.1, shape=shape)
-  return tf.Variable(initial)
+  if name:
+    return tf.Variable(initial, name)
+  else:
+    return tf.Variable(initial)
 
 class Implynet:
 
@@ -145,7 +152,7 @@ class Implynet:
     self.saver = tf.train.Saver()
 
   # save the model
-  def save(self, sess, model_loc="model.ckpt"):
+  def save(self, sess, model_loc="model_imply.ckpt"):
     save_path = self.saver.save(sess, model_loc)
     print("Model saved in file: %s" % save_path)
 
@@ -280,5 +287,68 @@ class Implynet:
     invs = [(x[0], np.argmax(x[0])) for x in sess.run(self.x_invs, feed_dict=feed_dic)]
     return zip([None] + obs, self.get_all_preds_fast(sess, obs), invs)
 
+class Invnet:
+  
+  def gen_feed_dict(self, true_lab, obs):
+    ret = dict()
+    ret[self.true_label] = true_lab
+    ret[self.observations] = obs
+    return ret
 
-    
+  # load the model and give back a session
+  def load_model(self, sess, saved_loc):
+    self.saver.restore(sess, saved_loc)
+    print("Inversion Model restored.")
+
+  # save the model
+  def save(self, sess, model_loc="model_invert.ckpt"):
+    save_path = self.saver.save(sess, model_loc)
+    print("Model saved in file: %s" % save_path)
+
+  def __init__(self, name):
+    with tf.variable_scope('inv') as scope:
+      self.true_label = tf.placeholder(tf.float32, [N_BATCH, X_L], name="true_label_"+name)
+      self.observations = tf.placeholder(tf.float32, [N_BATCH, L, L, 2], name="obs_"+name)
+      
+      self.n_hidden = 1200
+
+      W_inv1 = weight_variable([L*L*2, self.n_hidden], name="W_inv1_"+name)
+      b_inv1 = bias_variable([self.n_hidden], name="b_inv1_"+name)
+
+      W_inv2 = weight_variable([self.n_hidden,X_L], name="W_inv2_"+name)
+      b_inv2 = bias_variable([X_L], name="b_inv2_"+name)
+
+      self.VARS = [W_inv1, b_inv1, W_inv2, b_inv2]
+      
+      reshape_ob = tf.reshape(self.observations, [N_BATCH, L*L*2])
+      blah = tf.nn.relu(tf.matmul(reshape_ob, W_inv1) + b_inv1)
+      epsilon1 = tf.constant(1e-10, shape=[N_BATCH, X_L])
+      self.pred = tf.nn.softmax(tf.matmul(blah, W_inv2) + b_inv2) + epsilon1
+      self.cost = -tf.reduce_sum(self.true_label * tf.log(self.pred))
+
+      optimizer = tf.train.RMSPropOptimizer(0.001)
+
+      inv_gvs = optimizer.compute_gradients(self.cost)
+      self.train_inv = optimizer.apply_gradients(inv_gvs)
+
+      self.init = tf.initialize_all_variables()
+      self.saver = tf.train.Saver(self.VARS)
+
+  # train on a particular data batch
+  def train(self, sess, data_batch):
+    true_lab, obss = data_batch
+    feed_dic = self.gen_feed_dict(true_lab, obss)
+    cost_pre = sess.run([self.cost], feed_dict=feed_dic)[0]
+    sess.run([self.train_inv], feed_dict=feed_dic)
+    cost_post = sess.run([self.cost], feed_dict=feed_dic)[0]
+    print "train inv ", cost_pre, " ", cost_post, " ", True if cost_post < cost_pre else False
+
+  # get inversion from observations
+  def invert(self, sess, obs):
+    obss = [obs for _ in range(N_BATCH)]
+    data_in = inv_data_from_obs(obss)
+    feed_dic = self.gen_feed_dict(*data_in)
+    return sess.run([self.pred], feed_dict=feed_dic)[0][0]
+
+
+

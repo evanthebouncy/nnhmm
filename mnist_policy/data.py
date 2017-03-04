@@ -116,8 +116,9 @@ def get_img_class(test=False):
 import collections
 Trace = collections.namedtuple('Trace', 'Img S Os')
 
-def gen_rand_trace():
-  img, _x = get_img_class()
+def gen_rand_trace(test=False):
+  img, _x = get_img_class(test)
+  _x = _x[0]
   obs = []
   for ob_idx in range(OBS_SIZE):
     obs.append(gen_O(img))
@@ -159,7 +160,6 @@ def data_from_exp(exp):
     trr = traces[bb]
     # generate a hidden variable X
     # get a single thing out
-    img, _x = get_img_class()
     img = trr.Img
     
     imgs.append(img)
@@ -189,45 +189,95 @@ def data_from_exp(exp):
           np.array(new_ob_y, np.float32),\
           np.array(new_ob_tf, np.float32), imgs
 
-def gen_data():
-  x = []
-  
-  obs_x = [[] for i in range(OBS_SIZE)]
-  obs_y = [[] for i in range(OBS_SIZE)]
-  obs_tfs = [[] for i in range(OBS_SIZE)]
-  new_ob_x = []
-  new_ob_y = []
-  new_ob_tf = []
-
-  imgs = []
+# the thing is we do NOT use the trace observations, we need to generate random observations
+# to be sure we can handle all kinds of randomizations
+def inv_data_from_label_data(labelz, inputz):
+  labs = []
+  obss = []
 
   for bb in range(N_BATCH):
-    # generate a hidden variable X
-    # get a single thing out
-    img, _x = get_img_class()
-    imgs.append(img)
+    img = inputz[bb]
+    lab = labelz[bb]
+    labs.append(lab)
 
-    # add to x
-    x.append(_x[0])
-    # generate new observation
-    _new_ob_coord, _new_ob_lab = gen_O(img)
-    _new_ob_x, _new_ob_y = vectorize(_new_ob_coord)
-    new_ob_x.append(_new_ob_x)
-    new_ob_y.append(_new_ob_y)
-    new_ob_tf.append(_new_ob_lab)
-
+    obs = np.zeros([L,L,2])
     # generate observations for this hidden variable x
     for ob_idx in range(OBS_SIZE):
-      _ob_coord, _ob_lab = gen_O(img)
-      _ob_x, _ob_y = vectorize(_ob_coord)
-      obs_x[ob_idx].append(_ob_x)
-      obs_y[ob_idx].append(_ob_y)
-      obs_tfs[ob_idx].append(_ob_lab)
+      ob_coord, ob_lab = gen_O(img)
+      ox, oy = ob_coord
+      if ob_lab[0] == 1.0:
+        obs[ox][oy][0] = 1.0
+      if ob_lab[1] == 1.0:
+        obs[ox][oy][1] = 1.0
+    obss.append(obs)
+  return  np.array(labs, np.float32),\
+          np.array(obss, np.float32)
 
-  return  np.array(x, np.float32),\
-          np.array(obs_x, np.float32),\
-          np.array(obs_y, np.float32),\
-          np.array(obs_tfs, np.float32),\
-          np.array(new_ob_x, np.float32),\
-          np.array(new_ob_y, np.float32),\
-          np.array(new_ob_tf, np.float32), imgs
+# the thing is we do NOT use the trace observations, we need to generate random observations
+# to be sure we can handle all kinds of randomizations
+def inv_data_from_obs(batch_Os):
+  labs = []
+  obss = []
+
+  for bb in range(N_BATCH):
+    Os = batch_Os[bb]
+    # fake a lable, doesn't mattr
+    lab = [0.0 for _ in range(X_L)]
+    labs.append(lab)
+
+    obs = np.zeros([L,L,2])
+    # generate observations for this hidden variable x
+    for ob_idx in range(OBS_SIZE):
+      ob_coord, ob_lab = Os[ob_idx]
+      ox, oy = ob_coord
+      if ob_lab[0] == 1.0:
+        obs[ox][oy][0] = 1.0
+      if ob_lab[1] == 1.0:
+        obs[ox][oy][1] = 1.0
+    obss.append(obs)
+  return  np.array(labs, np.float32),\
+          np.array(obss, np.float32)
+
+
+# def gen_data():
+#   x = []
+#   
+#   obs_x = [[] for i in range(OBS_SIZE)]
+#   obs_y = [[] for i in range(OBS_SIZE)]
+#   obs_tfs = [[] for i in range(OBS_SIZE)]
+#   new_ob_x = []
+#   new_ob_y = []
+#   new_ob_tf = []
+# 
+#   imgs = []
+# 
+#   for bb in range(N_BATCH):
+#     # generate a hidden variable X
+#     # get a single thing out
+#     img, _x = get_img_class()
+#     imgs.append(img)
+# 
+#     # add to x
+#     x.append(_x[0])
+#     # generate new observation
+#     _new_ob_coord, _new_ob_lab = gen_O(img)
+#     _new_ob_x, _new_ob_y = vectorize(_new_ob_coord)
+#     new_ob_x.append(_new_ob_x)
+#     new_ob_y.append(_new_ob_y)
+#     new_ob_tf.append(_new_ob_lab)
+# 
+#     # generate observations for this hidden variable x
+#     for ob_idx in range(OBS_SIZE):
+#       _ob_coord, _ob_lab = gen_O(img)
+#       _ob_x, _ob_y = vectorize(_ob_coord)
+#       obs_x[ob_idx].append(_ob_x)
+#       obs_y[ob_idx].append(_ob_y)
+#       obs_tfs[ob_idx].append(_ob_lab)
+# 
+#   return  np.array(x, np.float32),\
+#           np.array(obs_x, np.float32),\
+#           np.array(obs_y, np.float32),\
+#           np.array(obs_tfs, np.float32),\
+#           np.array(new_ob_x, np.float32),\
+#           np.array(new_ob_y, np.float32),\
+#           np.array(new_ob_tf, np.float32), imgs
