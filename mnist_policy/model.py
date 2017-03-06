@@ -259,7 +259,15 @@ class Implynet:
     
     all_pred_at_key = all_preds[key_ob]
 
-    most_confs = [(abs(x[1][0] - x[1][1]), x[0]) for x in all_pred_at_key]
+    # get rid of already seen things
+    # print all_pred_at_key[0]
+    # print obs
+    # assert 0
+    observed_coords = [x[0] for x in obs]
+    all_pred_at_key1 = filter(lambda x: x[0] not in observed_coords, all_pred_at_key)
+    # print len(all_pred_at_key), " ", len(all_pred_at_key1)
+
+    most_confs = [(abs(x[1][0] - x[1][1]), x[0]) for x in all_pred_at_key1]
     most_conf = min(most_confs)
 
     return most_conf[1]
@@ -331,7 +339,8 @@ class Invnet:
       inv_gvs = optimizer.compute_gradients(self.cost)
       self.train_inv = optimizer.apply_gradients(inv_gvs)
 
-      self.init = tf.initialize_all_variables()
+      all_var_var = tf.get_collection(tf.GraphKeys.VARIABLES, scope='inv')
+      self.init = tf.initialize_variables(all_var_var)
       self.saver = tf.train.Saver(self.VARS)
 
   # train on a particular data batch
@@ -346,7 +355,8 @@ class Invnet:
   # get inversion from observations
   def invert(self, sess, obs):
     obss = [obs for _ in range(N_BATCH)]
-    data_in = inv_data_from_obs(obss)
+    fake_lab = [np.zeros(shape=[X_L]) for _ in range(N_BATCH)]
+    data_in = inv_batch_obs(fake_lab, obss)
     feed_dic = self.gen_feed_dict(*data_in)
     return sess.run([self.pred], feed_dict=feed_dic)[0][0]
 

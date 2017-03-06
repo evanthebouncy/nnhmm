@@ -213,18 +213,12 @@ def inv_data_from_label_data(labelz, inputz):
   return  np.array(labs, np.float32),\
           np.array(obss, np.float32)
 
-# the thing is we do NOT use the trace observations, we need to generate random observations
-# to be sure we can handle all kinds of randomizations
-def inv_data_from_obs(batch_Os):
-  labs = []
+# uses trace info
+def inv_batch_obs(labz, batch_Os):
   obss = []
 
   for bb in range(N_BATCH):
     Os = batch_Os[bb]
-    # fake a lable, doesn't mattr
-    lab = [0.0 for _ in range(X_L)]
-    labs.append(lab)
-
     obs = np.zeros([L,L,2])
     # generate observations for this hidden variable x
     for ob_idx in range(OBS_SIZE):
@@ -235,7 +229,7 @@ def inv_data_from_obs(batch_Os):
       if ob_lab[1] == 1.0:
         obs[ox][oy][1] = 1.0
     obss.append(obs)
-  return  np.array(labs, np.float32),\
+  return  np.array(labz, np.float32),\
           np.array(obss, np.float32)
 
 
