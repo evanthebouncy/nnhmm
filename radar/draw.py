@@ -34,8 +34,6 @@ def draw(m, name):
   plt.colorbar()
   plt.savefig(name)
 
-
-
 def draw_obs(obs, name):
   ret_shape = [20, 20, 1]
   ret = np.zeros(shape=ret_shape)
@@ -48,3 +46,53 @@ def draw_obs(obs, name):
         ret[idxx[0]][idxx[1]] = -1.0 * ii
   draw(ret, name)
 
+def draw_annotate(x_cords, y_cords, anns, name):
+  FIG.clf()
+  y = x_cords
+  z = y_cords
+  n = anns
+  fig = FIG
+  ax = fig.add_subplot(1,1,1)
+  ax.set_xlim([0,20])
+  ax.set_ylim([0,20])
+  ax.scatter(z, y)
+  for i, txt in enumerate(n):
+    ax.annotate(txt, (z[i],y[i]))
+  fig.savefig(name)
+
+def draw_trace(trace, name):
+  x_coords = []
+  y_coords = []
+  anno = []
+  for i, stuff in enumerate(trace):
+    ob, inv = stuff
+#    x_coords.append(inv[0])
+#    y_coords.append(inv[1])
+#    anno.append("X"+str(i))
+
+    if ob != None:
+      ob_coord, ob_outcome = ob
+      x_coords.append(ob_coord[0])
+      y_coords.append(ob_coord[1])
+      anno.append("O"+str(i)+str(int(ob_outcome[0])))
+
+  draw_annotate(x_coords, y_coords, anno, name)
+
+   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

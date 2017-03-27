@@ -375,3 +375,4 @@ def game_end(obs):
   seen_pos = [o for o in obs if o[1][0] > o[1][1]]  
   ret = len(seen_pos) == total_mass
   return ret
+

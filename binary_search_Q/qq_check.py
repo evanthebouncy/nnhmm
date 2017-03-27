@@ -4,29 +4,30 @@ x_x, obs_x, obs_tf, new_ob_x, new_ob_tf = gen_data()
 
 qq1 = Qnetwork("orig")
 qq2 = Qnetwork("clone")
+imply = Inetwork("imply")
 
 with tf.Session() as sess:
   sess.run(tf.initialize_all_variables())
 
   print "from network orig"
   qs = qq1.get_all_actions(sess, obs_x, obs_tf)
-  print qs[7][0][:4]
+  print qs[2][0][:4]
 
   print "from network clone"
   qq2.clone_from(sess, qq1)
   qs = qq2.get_all_actions(sess, obs_x, obs_tf)
-  print qs[7][0][:4]
+  print qs[2][0][:4]
 
   print "faking a change"
   qq1.fake_change(sess)
 
   print "from network orig after change"
   qs = qq1.get_all_actions(sess, obs_x, obs_tf)
-  print qs[7][0][:4]
+  print qs[2][0][:4]
 
   print "from network clone after orig changed, this shouldnt change"
   qs = qq2.get_all_actions(sess, obs_x, obs_tf)
-  print qs[7][0][:4]
+  print qs[2][0][:4]
 
   print "obs size ", OBS_SIZE
   print "action size ", len(qs)
@@ -44,7 +45,7 @@ with tf.Session() as sess:
 
   print "comparing trace from qq1 and qq2"
   print "HEYA trace from qq1"
-  tracee = gen_batch_trace(sess, qq1, envs)
+  tracee = gen_batch_trace(sess, qq1, envs, 0.0)
   print len(tracee), " ", len(tracee[0])
   print "for a particular trace "
   for xxxx in tracee[0]:
@@ -55,7 +56,7 @@ with tf.Session() as sess:
   print envs[0].X
 
   print "HEYA trace from qq1"
-  tracee2 = gen_batch_trace(sess, qq2, envs)
+  tracee2 = gen_batch_trace(sess, qq2, envs, 0.0)
   print len(tracee2), " ", len(tracee2[0])
   print "for a particular trace "
   for xxxx in tracee2[0]:
@@ -76,7 +77,7 @@ with tf.Session() as sess:
   # print "END"
 
   print "generating target from sample"
-  target = gen_target(sess, qq2, a_sample)
+  target = gen_target(sess, qq2, a_sample, imply)
   # for tg in target:
   #   print tg
 

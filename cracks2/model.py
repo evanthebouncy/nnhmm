@@ -1,0 +1,286 @@
+import tensorflow as tf
+import numpy as np
+from data import *
+
+def weight_variable(shape, name=None):
+  initial = tf.truncated_normal(shape, stddev=0.1)
+  if name:
+    return tf.Variable(initial, name)
+  else:
+    return tf.Variable(initial)
+
+
+def bias_variable(shape, name=None):
+  initial = tf.constant(0.1, shape=shape)
+  if name:
+    return tf.Variable(initial, name)
+  else:
+    return tf.Variable(initial)
+
+class Implynet:
+
+  def gen_feed_dict(self, obs,
+                    new_ob_x, new_ob_y, new_ob_tf):
+    ret = {}
+    ret[self.ph_obs] = obs
+
+    ret[self.ph_new_ob_x] = new_ob_x
+    ret[self.ph_new_ob_y] = new_ob_y
+    ret[self.ph_new_ob_tf] = new_ob_tf
+    return ret
+
+  # load the model and give back a session
+  def load_model(self, sess, saved_loc):
+    self.saver.restore(sess, saved_loc)
+    print("Model restored.")
+
+  # make the model
+  def __init__(self, name):
+    with tf.variable_scope('imply') as scope:
+      # set up placeholders
+      self.ph_obs = tf.placeholder(tf.float32, [N_BATCH, L, L, 2], 
+                  name="ph_obs")
+      self.ph_new_ob_x = tf.placeholder(tf.float32, [N_BATCH, L], name="ph_new_ob_x")
+      self.ph_new_ob_y = tf.placeholder(tf.float32, [N_BATCH, L], name="ph_new_ob_y")
+      self.ph_new_ob_tf = tf.placeholder(tf.float32, [N_BATCH,2], name="ph_new_ob_tf")
+
+
+      # some constants
+      self.n_hidden = 1200
+      self.n_pred_hidden = 1000
+
+      # a list of variables for different tasks
+      self.VAR_pred = []
+
+      # ------------------------------------------------------------------ convolve in the observations
+      reshapedd = tf.reshape(self.ph_obs, [N_BATCH, L*L*2])
+      W_enc = weight_variable([L*L*2, self.n_hidden])
+      b_enc = bias_variable([self.n_hidden])
+      hidden = tf.nn.relu(tf.matmul(reshapedd, W_enc) + b_enc)
+
+    # ----------------------------------------------------------------- answer the query
+      W_query1 = weight_variable([self.n_hidden + L + L, self.n_pred_hidden])
+
+      b_query1 = bias_variable([self.n_pred_hidden])
+      W_query2 = weight_variable([self.n_pred_hidden, 2])
+      b_query2 = bias_variable([2])
+      self.VAR_pred += [W_query1, b_query1, W_query2, b_query2]
+
+      hidden_cat_query = tf.nn.relu(\
+        tf.matmul(tf.concat(1, [self.ph_new_ob_x, self.ph_new_ob_y, hidden]),W_query1) + b_query1)
+
+      print "hidden_cat_query shape ", show_dim(hidden_cat_query)
+      e2 = tf.constant(1e-10, shape=[N_BATCH, 2])
+      self.query_preds = tf.nn.softmax(tf.matmul(hidden_cat_query, W_query2) + b_query2)+e2
+      print "query_preds shape ", show_dim(self.query_preds)
+
+      query_pred_costs = -tf.reduce_sum(self.ph_new_ob_tf * tf.log(self.query_preds))
+      print "costs shapes ", show_dim(query_pred_costs)
+      self.cost_query_pred = query_pred_costs
+
+      # ------------------------------------------------------------------------ training steps
+      # gvs = optimizer.compute_gradients(cost)
+      # capped_gvs = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gvs]
+      # train_op = optimizer.apply_gradients(capped_gvs)
+
+
+      optimizer = tf.train.RMSPropOptimizer(0.0001)
+
+      pred_gvs = optimizer.compute_gradients(self.cost_query_pred, var_list = self.VAR_pred)
+      capped_pred_gvs = [(tf.clip_by_value(grad, -5., 5.), var) for grad, var in pred_gvs]
+      #train_pred = optimizer.minimize(cost_pred, var_list = VAR_pred)
+      self.train_query_pred = optimizer.apply_gradients(capped_pred_gvs)
+
+      # train_query_pred = optimizer.minimize(cost_query_pred, var_list = VAR_pred)
+      # Before starting, initialize the variables.  We will 'run' this first.
+      self.init = tf.initialize_all_variables()
+      self.saver = tf.train.Saver()
+
+  # save the model
+  def save(self, sess, model_loc="model_imply.ckpt"):
+    save_path = self.saver.save(sess, model_loc)
+    print("Model saved in file: %s" % save_path)
+
+  # train on a particular data batch
+  def train(self, sess, data_batch):
+    _, obs, new_ob_x, new_ob_y, new_ob_tf, _ = data_batch
+    feed_dic = self.gen_feed_dict(obs, new_ob_x, new_ob_y, new_ob_tf)
+
+    cost_query_pred_pre = sess.run([self.cost_query_pred], feed_dict=feed_dic)[0]
+    sess.run([self.train_query_pred], feed_dict=feed_dic)
+    cost_query_pred_post = sess.run([self.cost_query_pred], feed_dict=feed_dic)[0]
+    print "train query pred ", cost_query_pred_pre, " ",\
+      cost_query_pred_post, " ", True if cost_query_pred_post < cost_query_pred_pre else False
+
+  # =========== HELPERS =============
+
+  # a placeholder to feed in a single observation
+  def get_feed_dic_obs(self, obs):
+    single_ob = np.zeros([L,L,2])
+
+    num_obs = len(obs)
+    for ob_idx in range(num_obs):
+      ob_coord, ob_lab = obs[ob_idx]
+      ob_x, ob_y = ob_coord
+      single_ob[ob_x][ob_y] = ob_lab
+
+    obss = np.array([single_ob for _ in range(N_BATCH)], np.float32)
+
+    feed_dic = dict()
+    feed_dic[self.ph_obs] = obss
+    return feed_dic
+
+  def get_preds_batch(self, sess, obs, batch_querys):
+    ret = []
+
+    feed_dic = self.get_feed_dic_obs(obs)
+    assert len(batch_querys) == N_BATCH
+
+    new_ob_x = []
+    new_ob_y = []
+
+    for q in batch_querys:
+      q_x, q_y = vectorize(q)
+      new_ob_x.append(q_x)
+      new_ob_y.append(q_y)
+
+      
+    feed_dic[self.ph_new_ob_x] = np.array(new_ob_x)
+    feed_dic[self.ph_new_ob_y] = np.array(new_ob_y)
+
+    pred_tfs = sess.run(self.query_preds, feed_dict=feed_dic)
+    for q_idx, q in enumerate(batch_querys):
+      ret.append((q, pred_tfs[q_idx]))
+
+    return ret
+
+  def get_all_preds_fast(self, sess, obs):
+    all_querys = []
+    for i in range(L):
+      for j in range(L):
+        all_querys.append((i,j))
+
+    def batch_qrys(all_qs):
+      ret = []
+      while len(all_qs) != 0:
+        to_add = [(0,0) for _ in range(N_BATCH)]
+        for idk in range(N_BATCH):
+          if len(all_qs) == 0:
+            break
+          to_add[idk] = all_qs.pop()
+        ret.append(to_add)
+      return ret
+
+    ret = []
+    batched_qrysss = batch_qrys(all_querys)
+    for batched_q in batched_qrysss:
+      ppp = self.get_preds_batch(sess, obs, batched_q)
+      ret += ppp
+
+    return ret
+
+  def get_most_confuse(self, sess, obs):
+    key_ob = len(obs)
+    all_preds = self.get_all_preds_fast(sess, obs)
+    
+    all_pred_at_key = all_preds
+
+    # get rid of already seen things
+    observed_coords = [x[0] for x in obs]
+    all_pred_at_key1 = filter(lambda x: x[0] not in observed_coords, all_pred_at_key)
+    # print len(all_pred_at_key), " ", len(all_pred_at_key1)
+
+    most_confs = [(abs(x[1][0] - x[1][1]), x[0]) for x in all_pred_at_key1]
+    most_conf = min(most_confs)
+
+    return most_conf[1]
+
+  def get_active_trace(self, sess, query, epi=0.0):
+    obs = []
+
+    for i in range(OBS_SIZE):
+      if np.random.random() < epi:
+        rand_coord = sample_coord()
+        obs.append((rand_coord, query(rand_coord)))
+      else:
+        most_conf = self.get_most_confuse(sess, obs)
+        obs.append((most_conf, query(most_conf)))
+
+    feed_dic = self.get_feed_dic_obs(obs)
+    # return zip([None] + obs, self.get_all_preds_fast(sess, obs))
+    return obs
+
+#  def get_random_inv(self, sess, query):
+#    ob_pts = [sample_coord_bias(query) for _ in range(OBS_SIZE)]
+#    obs = [(op, query(op)) for op in ob_pts]
+#    
+#    feed_dic = self.get_feed_dic_obs(obs)
+#    return zip([None] + obs, self.get_all_preds_fast(sess, obs), invs)
+
+class Invnet:
+  
+  def gen_feed_dict(self, true_lab, obs):
+    ret = dict()
+    ret[self.true_label] = true_lab
+    ret[self.observations] = obs
+    return ret
+
+  # load the model and give back a session
+  def load_model(self, sess, saved_loc):
+    self.saver.restore(sess, saved_loc)
+    print("Inversion Model restored.")
+
+  # save the model
+  def save(self, sess, model_loc="model_invert.ckpt"):
+    save_path = self.saver.save(sess, model_loc)
+    print("Model saved in file: %s" % save_path)
+
+  def __init__(self, name):
+    with tf.variable_scope('inv') as scope:
+      self.true_label = tf.placeholder(tf.float32, [N_BATCH, X_L], name="true_label_"+name)
+      self.observations = tf.placeholder(tf.float32, [N_BATCH, L, L, 2], name="obs_"+name)
+      
+      self.n_hidden = 1200
+
+      W_inv1 = weight_variable([L*L*2, self.n_hidden], name="W_inv1_"+name)
+      b_inv1 = bias_variable([self.n_hidden], name="b_inv1_"+name)
+
+      W_inv2 = weight_variable([self.n_hidden,X_L], name="W_inv2_"+name)
+      b_inv2 = bias_variable([X_L], name="b_inv2_"+name)
+
+      self.VARS = [W_inv1, b_inv1, W_inv2, b_inv2]
+      
+      reshape_ob = tf.reshape(self.observations, [N_BATCH, L*L*2])
+      blah = tf.nn.relu(tf.matmul(reshape_ob, W_inv1) + b_inv1)
+      epsilon1 = tf.constant(1e-10, shape=[N_BATCH, X_L])
+      self.pred = tf.nn.softmax(tf.matmul(blah, W_inv2) + b_inv2) + epsilon1
+      self.cost = -tf.reduce_sum(self.true_label * tf.log(self.pred))
+
+      optimizer = tf.train.RMSPropOptimizer(0.001)
+
+      inv_gvs = optimizer.compute_gradients(self.cost)
+      self.train_inv = optimizer.apply_gradients(inv_gvs)
+
+      all_var_var = tf.get_collection(tf.GraphKeys.VARIABLES, scope='inv')
+      self.init = tf.initialize_variables(all_var_var)
+      self.saver = tf.train.Saver(self.VARS)
+
+  # train on a particular data batch
+  def train(self, sess, data_batch):
+    true_lab, obss = data_batch
+    feed_dic = self.gen_feed_dict(true_lab, obss)
+    cost_pre = sess.run([self.cost], feed_dict=feed_dic)[0]
+    sess.run([self.train_inv], feed_dict=feed_dic)
+    cost_post = sess.run([self.cost], feed_dict=feed_dic)[0]
+    print "train inv ", cost_pre, " ", cost_post, " ", True if cost_post < cost_pre else False
+
+  # get inversion from observations
+  def invert(self, sess, obs):
+    obss = [obs for _ in range(N_BATCH)]
+    fake_lab = [np.zeros(shape=[X_L]) for _ in range(N_BATCH)]
+    data_in = inv_batch_obs(fake_lab, obss)
+    feed_dic = self.gen_feed_dict(*data_in)
+    return sess.run([self.pred], feed_dict=feed_dic)[0][0]
+
+
+

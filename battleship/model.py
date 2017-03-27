@@ -62,10 +62,8 @@ VAR_pred = []
 
 # --------------------------------------------------------------------- initial hidden h(X)
 # set up weights for input outputs!
-hidden = tf.Variable(tf.truncated_normal([1, n_hidden], stddev=0.1))
-print "initial hidden dim ", show_dim(hidden)
-hidden_tile = tf.tile(hidden, [N_BATCH, 1])
-print "tiled hidden dim ", show_dim(hidden_tile)
+hidden_tile = tf.zeros([N_BATCH, n_hidden])
+print "initial hidden dim ", show_dim(hidden_tile)
 
 # ------------------------------------------------------------------ convolve in the observations
 

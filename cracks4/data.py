@@ -7,15 +7,15 @@ from tensorflow.examples.tutorials.mnist import input_data
 
 from numpy.linalg import norm
 
-DIR_CHANGE = 0.9
-# SPLIT_PR = 0.1
-SPLIT_PR = 0.0
+DIR_CHANGE = 0.6
+SPLIT_PR = 0.1
+# SPLIT_PR = 0.0
 DIR_SPL_CHG = 0.2
 L = 20
 
 X_L = 10
 N_BATCH = 30
-OBS_SIZE = 100
+OBS_SIZE = 150
 
 KEEP = 0.6
 
@@ -70,7 +70,7 @@ def mk_query(X):
   def query(O):
     for xx in X:
       # print O, xx, dist(xx, O)
-      if dist(xx, O) < 3:
+      if dist(xx, O) < 0.7:
         return [1.0, 0.0]
     return [0.0, 1.0]
   return query

@@ -38,7 +38,7 @@ class Implynet:
       self.full_obs = tf.placeholder(tf.float32, [N_BATCH, L , L , 2], name="full_obs")
 
       # some constants
-      self.n_hidden = 200
+      self.n_hidden = 500
 
       # make hidden represnatation
       W1 = weight_variable([L * L * 2, self.n_hidden])

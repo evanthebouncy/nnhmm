@@ -3,10 +3,10 @@ from draw import *
 from world import *
 
 # total number of observations
-L = 4
-OBS_SIZE = 3
+L = 10
+OBS_SIZE = 4
 # length of the field i.e. LxL field
-N_BATCH = 10
+N_BATCH = 20
 
 # ------------------------------------------------------------------ helpers
 
@@ -167,40 +167,4 @@ def show_state(s):
     qq, aa = stp
     ret.append((np.argmax(qq), aa))
   return ret
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

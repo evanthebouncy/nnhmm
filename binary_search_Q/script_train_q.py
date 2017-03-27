@@ -2,16 +2,56 @@ from model_q import *
 
 qq = Qnetwork("orig")
 qq_clone = Qnetwork("clone")
+imply = Inetwork("imply")
+# imply = None
 
-N_EPI = 10000
-N_CLONE = 20
+N_EPI = 5000000000
+N_CLONE = 100
+
+
+
+
+
+
+
+
+
+
+
+def get_states_batch(envs):
+  ret = []
+  for e in envs:
+    to_add = []
+    for ii in range(np.random.randint(1, OBS_SIZE)):
+      rand_oo = np.random.randint(L)
+      rand_obs = e.query(rand_oo)
+      to_add.append((rand_oo, rand_obs))
+    ret.append(to_add)
+  return ret
+
+
+
 
 with tf.Session() as sess:
   sess.run(tf.initialize_all_variables())
-  experiences = Experience(1000)
+  experiences = Experience(10000)
 #  envs = get_envs(0.0)
 
-  for episode in range(N_EPI):
+  for i in range(5000):
+    print "\n\n\nPRE TRAIN ITERAT ", i, " ", 5000
+    envs = get_envs()
+    
+    stackz = get_states_batch(envs)
+    imply.learn(sess, stackz)
+
+
+
+
+
+
+
+
+  for episode in xrange(N_EPI):
     print "-------------------------------------------- ON EPISODE ", episode
 
     # target network cloning once in awhile
@@ -19,7 +59,7 @@ with tf.Session() as sess:
       print "cloining target"
       qq_clone.clone_from(sess, qq)
 
-    episilon = 1.0 - float(episode) / N_EPI
+    episilon = 1.0 - float(episode) / N_EPI if np.random.random() < 0.5 else 0.0
     print "episilon of random move probability ", episilon
     envs = get_envs()
 
@@ -42,12 +82,14 @@ with tf.Session() as sess:
     print "Add to experience"
     for tr in trace:
       experiences.add(tr)
+    print "Experience size ", len(experiences.buf)
 
     print "A sample of experience "
     a_sample = experiences.sample()
 
     print "generating target from sample"
-    target = gen_target(sess, qq_clone, a_sample)
+    # target = gen_target(sess, qq_clone, a_sample)
+    target = gen_target(sess, qq_clone, a_sample, imply)
 
     print "for this particular target "
     for tgg in target:
@@ -58,4 +100,7 @@ with tf.Session() as sess:
 
     print "learning "
     qq.learn(sess, prepare_target_feed(target))
+
+    print "training prediction from ss in sample"
+    imply.learn(sess, [x[2] for x in a_sample])
 

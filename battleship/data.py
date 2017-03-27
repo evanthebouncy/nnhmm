@@ -2,7 +2,7 @@ import numpy as np
 from draw import *
 
 # total number of observations
-OBS_SIZE = 20
+OBS_SIZE = 10
 # length of the field i.e. LxL field
 N_BATCH = 50
 

@@ -102,7 +102,7 @@ class Qnetwork():
     print show_dim(cost_guess)
 
     self.cost = cost_act + cost_guess
-    self.optimizer = tf.train.RMSPropOptimizer(0.002)
+    self.optimizer = tf.train.RMSPropOptimizer(0.0001)
     self.train_node = self.optimizer.minimize(self.cost, var_list = self.VAR)
 
   # clone weights from another network
@@ -186,6 +186,154 @@ class Qnetwork():
 #    print sess.run(self.bac, feed_dict = fed_dic)
 #    print sess.run(self.cost_guess, feed_dict = fed_dic)
 
+# agent that shape the rewards
+# Implication Network
+class Inetwork():
+
+  def __init__(self, name):
+  
+    # some constants
+    self.n_hidden = 400
+    self.VAR = []
+
+    # inputs
+    self.ph_obs_x = [tf.placeholder(tf.float32, [N_BATCH, L], 
+            name="ph_ob_x"+str(i)) for i in range(OBS_SIZE)]
+    self.ph_obs_tf = [tf.placeholder(tf.float32, [N_BATCH, 2],
+            name="ph_ob_tf"+str(k)) for k in range(OBS_SIZE)]
+
+    # output
+    self.ph_new_x = tf.placeholder(tf.float32, [N_BATCH, L], name="ph_new_x")
+    self.ph_new_tf = tf.placeholder(tf.float32, [N_BATCH, 2], name="ph_new_tf")
+    self.learn_mask = [tf.placeholder(tf.float32, [N_BATCH],
+            name="ph_learn_mask"+str(k)) for k in range(OBS_SIZE)]
+
+    # lstm initial state
+    state = tf.zeros([N_BATCH, self.n_hidden])
+    # stacked lstm
+    lstm = tf.nn.rnn_cell.MultiRNNCell([tf.nn.rnn_cell.LSTMCell(100), 
+                                        tf.nn.rnn_cell.LSTMCell(100)])
+    hiddens = [state]
+
+    with tf.variable_scope("LSTMIMP"+name) as scope:
+      for i in range(OBS_SIZE):
+        if i > 0:
+          scope.reuse_variables()
+        cell_input = tf.concat(1, [self.ph_obs_x[i], self.ph_obs_tf[i]])
+        output, state = lstm(cell_input, state)
+        hiddens.append(state)
+
+    lstm_variables = [v for v in tf.all_variables()
+                        if v.name.startswith("LSTMIMP"+name)]
+
+    print lstm_variables
+
+    print "state shape ", show_dim(state)
+
+    self.VAR += lstm_variables
+
+    # --------------------------------------------------------------------- predict the output
+    W_I1 = weight_variable([self.n_hidden + L, self.n_hidden])
+    b_I1 = bias_variable([self.n_hidden])
+    W_I2 = weight_variable([self.n_hidden, 2])
+    b_I2 = bias_variable([2])
+
+    self.VAR += [W_I1, b_I1, W_I2, b_I2]
+    hid_cons = [tf.concat(1, [hidden, self.ph_new_x]) for hidden in hiddens]
+    e_2 = tf.constant(1e-5, shape=[N_BATCH, 2])
+
+    self.preds = [ tf.nn.softmax(tf.matmul(tf.nn.relu(tf.matmul(hid_con, W_I1) + b_I1), W_I2) + b_I2) + e_2 for hid_con in hid_cons]
+
+    print "pred shape ", show_dim(self.preds)
+   
+    self.entropys = [ -tf.reduce_sum(tf.log(x) * x, 1) for x in self.preds ]
+    print "entropy shape ", show_dim(self.entropys)
+
+    # ------------------------------------------------------------------------ cost err
+    self.pred_costs = [-tf.reduce_sum(self.ph_new_tf * tf.log(op), 1) for op in self.preds]
+    self.pred_costs = [tf.reduce_sum(self.learn_mask * coco) for coco in self.pred_costs]
+    print "pred_costs shape ", show_dim(self.pred_costs)
+    self.pred_cost = sum(self.pred_costs)
+
+    self.optimizer = tf.train.RMSPropOptimizer(0.0001)
+    self.train_node = self.optimizer.minimize(self.pred_cost, var_list = self.VAR)
+
+  def gen_feed_dict(self, obs_x, obs_tf):
+    ret = {}
+    for a, b in zip(self.ph_obs_x, obs_x):
+      ret[a] = b
+    for a, b in zip(self.ph_obs_tf, obs_tf):
+      ret[a] = b
+    return ret
+
+  def get_states_batch_dict(self, states_batch):
+    fed_obs_x =  [np.zeros(shape=[N_BATCH,L]) for _ in range(OBS_SIZE)]
+    fed_obs_tf = [np.zeros(shape=[N_BATCH,2]) for _ in range(OBS_SIZE)]
+
+    for batch_id, s_b in enumerate(states_batch):
+      for state_id, s in enumerate(s_b):
+        s_x, s_tf = s
+        s_x = onehot(s_x, L) 
+        fed_obs_x[state_id][batch_id] = s_x
+        fed_obs_tf[state_id][batch_id] = s_tf
+    fed_dic = self.gen_feed_dict(fed_obs_x, fed_obs_tf)
+    return fed_dic
+
+
+  def get_potential(self, sess, states_batch):
+
+    state_idxs = [len(xxxx) for xxxx in states_batch]
+    last_query = []
+    for sbb in states_batch:
+      if len(sbb) == 0:
+        last_query.append(np.zeros(shape=[L]))
+      else:
+        last_query.append(onehot(sbb[-1][0], L))
+
+    fed_dic = self.get_states_batch_dict(states_batch)
+    # feed in the last query
+    last_query = np.array(last_query)
+    fed_dic[self.ph_new_x] = last_query
+
+    all_ents = sess.run(self.entropys, feed_dict = fed_dic)
+    potentials = []
+    for batch_idx in range(N_BATCH):
+      if state_idxs[batch_idx] == 0:
+        potentials.append(0.0)
+      else:
+        potentials.append(all_ents[state_idxs[batch_idx] - 1][batch_idx]) 
+    return potentials
+
+  def learn(self, sess, learn_states):
+    state_idxs = [len(xxxx) for xxxx in learn_states]
+    last_query = []
+    last_tf = []
+    learn_mask = np.zeros(shape=[OBS_SIZE, N_BATCH])
+    for batch_id, sbb in enumerate(learn_states):
+      if len(sbb) == 0:
+        assert 0, "should never happen.... "
+        last_query.append(np.zeros(shape=[L]))
+      else:
+        last_query.append(onehot(sbb[-1][0], L))
+        last_tf.append(sbb[-1][1])
+        learn_mask[len(sbb)-1][batch_id] = 1.0
+    # print last_query
+    # print learn_mask
+    # assert 0
+
+    fed_dic = self.get_states_batch_dict(learn_states)
+    # feed in the last query
+    last_query = np.array(last_query)
+    fed_dic[self.ph_new_x] = last_query
+    fed_dic[self.ph_new_tf] = last_tf
+    for a, b in zip(self.learn_mask, learn_mask):
+      fed_dic[a] = b
+
+    print "imply costs during training "
+    print sess.run(self.pred_cost, feed_dict = fed_dic)
+    sess.run(self.train_node, feed_dict = fed_dic)
+    print sess.run(self.pred_cost, feed_dict = fed_dic)
+
 class Experience:
   
   def __init__(self, buf_len):
@@ -257,12 +405,22 @@ def gen_batch_trace(sess, qnet, envs, episilon):
 # if s is the FINAL state before our prediction, leave it as ("guess", s, a, truth) just learn with supervised using the truth
 # if s' is the FINAL state, then we use xentropy with Q_targets last step to get target
 # otherwise we use max_{a'}Q(s',a') for the a' as the query step
-def gen_target(sess, qnet_target, batch_experience):
+def gen_target(sess, qnet_target, batch_experience, net_shape=None):
   ret = []
   s_s = [x[0] for x in batch_experience]
   ss_s = [x[2] for x in batch_experience]
   next_state_qs = qnet_target.get_action(sess, ss_s)
   guesses = qnet_target.get_guess(sess, ss_s)
+
+  s_s_pot = net_shape.get_potential(sess, s_s) if net_shape else [0.0 for _ in range(N_BATCH)]
+  ss_s_pot = net_shape.get_potential(sess, ss_s) if net_shape else [0.0 for _ in range(N_BATCH)]
+
+  print "potential zippy --------------------------"
+  for aa, bb in zip(s_s, s_s_pot):
+    print aa, bb
+  for aa, bb in zip(ss_s, ss_s_pot):
+    print aa, bb
+    
 
   for batch_id, exp in enumerate(batch_experience):
     s, a, ss, r, truth, typ = exp
@@ -270,6 +428,8 @@ def gen_target(sess, qnet_target, batch_experience):
     if typ == "guess":
       ret.append(("guess", s, a, truth))
     if typ == "query":
+      # update reward with potentials
+      r = r + ss_s_pot[batch_id] - s_s_pot[batch_id]
       # if this is the penultimate state
       # use the Q to find out V(ss) from guess 
       if truth != None:

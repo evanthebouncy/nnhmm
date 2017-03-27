@@ -11,6 +11,8 @@ acti_inv = get_active_inv(sess, query)
 print "original hidden ", hid_x
 print "random sample ", rand_inv
 print "active learning ", acti_inv
+draw_trace(rand_inv, "rand_inv.png")
+draw_trace(acti_inv, "acti_inv.png")
 
 assert 0
 
