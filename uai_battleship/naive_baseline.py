@@ -38,7 +38,21 @@ def baseline_get_trace(qry):
 
 def baseline_get_all_preds(trace_prefix):
   ret = np.zeros([L,L,2])
+  for i in range(L):
+    for j in range(L):
+      ret[i][j] = [0.0, 1.0]
   for ob in trace_prefix:
     crd, ans = ob
     ret[crd[0]][crd[1]] = ans
   return ret 
+
+def baseline_pred_acc(b_preds, qry):
+  num_cor = 0
+  for i in range(L):
+    for j in range(L):
+      if b_preds[i][j] == qry((i,j)):
+        num_cor += 1
+  return float(num_cor) / L*L
+
+
+        

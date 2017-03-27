@@ -153,7 +153,23 @@ class Implynet:
     most_conf = min(most_confs)
     return most_conf[1]
 
-  def get_active_trace(self, sess, query, epi=0.0):
+  def get_most_likely(self, sess, obs):
+    obs_qry = [_[0] for _ in obs]
+    all_preds = self.get_all_preds(sess, obs)
+    
+    all_pred_at_key1 = []
+    for i in range(L):
+      for j in range(L):
+        qry = i, j
+        value = all_preds[i][j]
+        if qry not in obs_qry:
+          all_pred_at_key1.append((qry, value))
+    most_likely = [(x[1][0], x[0]) for x in all_pred_at_key1]
+    most_conf = max(most_likely)
+    return most_conf[1]
+    
+
+  def get_active_trace(self, sess, query, epi=0.0, play=False):
     obs = []
 
     for i in range(OBS_SIZE):
@@ -161,7 +177,7 @@ class Implynet:
         rand_coord = sample_coord_new(obs)
         obs.append((rand_coord, query(rand_coord)))
       else:
-        most_conf = self.get_most_confuse(sess, obs)
+        most_conf = self.get_most_confuse(sess, obs) if not play else self.get_most_likely(sess, obs)
         obs.append((most_conf, query(most_conf)))
 
     return obs
