@@ -55,4 +55,18 @@ def baseline_pred_acc(b_preds, qry):
   return float(num_cor) / L*L
 
 
+def b_random_next_move(obs):
+  all_obs = [(i,j) for i in range(L) for j in range(L)]
+  for oo in [o[0] for o in obs]:
+    all_obs.remove(oo)
+  return random.choice(all_obs)
+
+def rrandom_trace(qry):
+  obs = []
+  for _ in range(L*L):
+    qry_pt = b_random_next_move(obs)
+    answer = qry(qry_pt)
+    obs.append((qry_pt, answer))
+  return obs
+
         
