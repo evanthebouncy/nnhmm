@@ -69,7 +69,7 @@ acc_oc = np.array([0.0 for _ in range(OBS_SIZE)])
 
 link_stats = dict()
 
-for test_id in range(1,1000+1):
+for test_id in range(1,10000+1):
   print "iteration ", test_id
   links_fail, path_chg, ge_fail = get_instance()
   print "links failure: "
