@@ -42,3 +42,8 @@ plt.savefig("graph.png")
 
 # print gen_obs_links(G_E)
 print get_ccomp(G_E_fail)
+
+print get_dependency_coef(G_E, (9,6))
+
+
+

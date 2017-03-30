@@ -180,9 +180,24 @@ def draw_graph(gv, ge, name):
 
   plt.savefig(name)
 
+def get_dependency_coef(ge, link):
+  broken_graph = copy.deepcopy(ge)
+  iii, jjj = link
+  broken_graph[iii][jjj] = 0
+  broken_graph[jjj][iii] = 0
+  
+  comps = get_ccomp(broken_graph)
+  halfs = dict()
+  for blah in comps:
+    if comps[blah] not in halfs:
+      halfs[comps[blah]] = 1
+    else:
+      halfs[comps[blah]] += 1
 
+  M = float(halfs[0])
+  N = float(halfs[1])
 
-
+  return (M * N) / ( (M + N) * (M + N - 1) )
 
 # V = gen_pts(N)
 # # G = gen_graph(V, 6)
